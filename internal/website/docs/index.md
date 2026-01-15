@@ -27,8 +27,22 @@ about the framework.
 
 - [Getting Started](getting-started.md)
 - [Architecture](architecture.md)
+- [Configuration](config.md)
 - [Registry](registry.md)
 - [Broker](broker.md)
 - [Client/Server](client-server.md)
 - [Transport](transport.md)
 - [Store](store.md)
+- [Plugins](plugins.md)
+- [Examples](examples/index.md)
+- [Server (optional)](server.md)
+
+## Advanced
+
+- [Framework Comparison](guides/comparison.md)
+- [Architecture Decisions](architecture/index.md)
+- [Real-World Examples](examples/realworld/index.md)
+- [Migration Guides](guides/migration/index.md)
+- [Observability](observability.md)
+- [Contributing](contributing.md)
+- [Roadmap](roadmap.md)

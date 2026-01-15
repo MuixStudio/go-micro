@@ -5,14 +5,77 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% if page.title %}{{ page.title }} | {% endif %}Go Micro Documentation</title>
   <style>
-    body { font-family: sans-serif; margin: 0; padding: 0; background: #f9f9f9; }
-    header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; background: #fff; border-bottom: 1px solid #eee; }
-    .logo-link { display: flex; align-items: center; text-decoration: none; }
-    .logo-link img { height: 40px; margin-right: 10px; }
-    nav a { margin-left: 24px; color: #333; text-decoration: none; font-weight: 500; }
-    nav a:hover { color: #007d9c; }
-    main { max-width: 800px; margin: 2rem auto; background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
-    pre { background: whitesmoke; padding: 10px; border-radius: 5px; }
+    :root {
+      --bg: #ffffff;
+      --border: #e5e5e5;
+      --sidebar-width: 230px;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; margin:0; background: var(--bg); color:#222; }
+    a { color:#0366d6; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:.75rem 1.5rem; background:#fff; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:20; flex-wrap:wrap; }
+    .right-tools { display:flex; align-items:center; gap:.75rem; }
+    .search-inline { position:relative; }
+    .search-inline input { padding:.4rem .6rem; border:1px solid #d0d7de; border-radius:4px; font-size:.85rem; width:160px; }
+    .search-inline input:focus { outline:none; border-color:#0366d6; }
+    .dark-toggle { cursor:pointer; background:#f6f8fa; border:1px solid #d0d7de; padding:.35rem .6rem; border-radius:4px; font-size:.75rem; }
+    .dark body, body.dark { --bg:#0d1117; --border:#30363d; color:#e6edf3; background:#0d1117; }
+    body.dark header, body.dark .sidebar, body.dark .content, body.dark footer { background:#0d1117; }
+    body.dark a { color:#58a6ff; }
+    body.dark pre { background:#161b22; border-color:#30363d; }
+    body.dark .sidebar a:hover { background:#161b22; }
+    .logo-link { display:flex; align-items:center; gap:.5rem; font-weight:600; color:#222; white-space:nowrap; }
+    .logo-link img { height:36px; }
+    header nav { display:flex; align-items:center; flex-wrap:wrap; }
+    header nav a { margin-left:1rem; font-weight:500; white-space:nowrap; }
+    .layout { display:flex; align-items:flex-start; max-width: 1400px; margin:0 auto; padding:0 1.25rem 4rem; }
+    .sidebar { width:var(--sidebar-width); padding:1.25rem .75rem 2rem; border-right:1px solid var(--border); position:sticky; top:60px; max-height:calc(100vh - 60px); overflow:auto; font-size:.9rem; }
+    .sidebar h4 { margin:1.2rem 0 .5rem; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; color:#555; }
+    .sidebar ul { list-style:none; margin:0; padding:0; }
+    .sidebar li { margin:.35rem 0; }
+    .sidebar a { color:#222; display:block; padding:.25rem .4rem; border-radius:4px; }
+    .sidebar a:hover { background:#f2f5f8; }
+    .content { flex:1; min-width:0; padding:2rem 2.5rem; }
+    .content .markdown-body { max-width: 100%; }
+    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    pre { background:#f6f8fa; border:1px solid #d0d7de; padding:.9rem 1rem; border-radius:6px; overflow-x:auto; max-width:100%; }
+    code { word-wrap: break-word; }
+    pre code { word-wrap: normal; }
+    table { border-collapse:collapse; width:100%; overflow-x:auto; display:block; }
+    th, td { border:1px solid #d0d7de; padding:.5rem .6rem; text-align:left; }
+    th { background:#f2f5f8; }
+    img { max-width:100%; height:auto; }
+    footer { max-width:1400px; margin:0 auto; padding:2rem 1.5rem; border-top:1px solid var(--border); font-size:.8rem; color:#555; }
+    .menu-toggle { display:none; background:#0366d6; color:#fff; border:none; padding:.5rem .75rem; border-radius:4px; cursor:pointer; font-size:.85rem; margin-left:auto; }
+    .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:25; }
+    .sidebar-overlay.active { display:block; }
+    @media (max-width: 900px) {
+      header { padding:.5rem 1rem; }
+      header nav a { margin-left:.5rem; font-size:.85rem; }
+      .logo-link { font-size:1.1rem !important; }
+      .logo-link img { height:28px; }
+      .menu-toggle { display:block; }
+      .layout { padding:0; }
+      .sidebar { position:fixed; left:-100%; top:60px; bottom:0; width:280px; max-width:85vw; background:var(--bg); border-right:1px solid var(--border); border-bottom:none; z-index:30; transition:left 0.3s ease; overflow-y:auto; padding:1rem; }
+      .sidebar.active { left:0; }
+      .content { width:100%; padding:1.5rem 1rem; }
+      .content h1 { font-size:1.75rem; margin-top:0; }
+      .content h2 { font-size:1.4rem; }
+      .content h3 { font-size:1.15rem; }
+      pre { padding:.6rem; font-size:.8rem; overflow-x:auto; white-space:pre; }
+      table { font-size:.85rem; }
+      footer { padding:1.5rem 1rem; font-size:.75rem; }
+    }
+    @media (max-width: 480px) {
+      header nav a { font-size:.75rem; margin-left:.4rem; }
+      .logo-link span { font-size:1rem !important; }
+      .content { padding:1rem .75rem; }
+      .content h1 { font-size:1.5rem; }
+      .content h2 { font-size:1.25rem; }
+      pre { font-size:.75rem; padding:.5rem; }
+      .sidebar { width:100%; max-width:100%; }
+    }
   </style>
 </head>
 <body>
@@ -21,14 +84,115 @@
       <img src="/images/logo.png" alt="Go Micro Logo">
       <span style="font-size: 1.3rem; font-weight: bold; color: #222;">Go Micro</span>
     </a>
+    <button class="menu-toggle" id="menuToggle">☰ Menu</button>
     <nav>
       <a href="/docs/">Docs</a>
+      <a href="/docs/search.html">Search</a>
       <a href="https://github.com/micro/go-micro" target="_blank" rel="noopener">GitHub</a>
       <a href="/">Home</a>
     </nav>
   </header>
-  <main>
-    {{ content }}
-  </main>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="layout">
+    <aside class="sidebar">
+      {% assign nav = site.data.navigation %}
+      {% for section in nav %}
+        {% unless section[0] == 'search_order' %}
+        <h4>{{ section[0] | capitalize }}</h4>
+        <ul>
+          {% for item in section[1] %}
+            <li><a href="{{ item.url }}" {% if item.url == page.url %}style="font-weight:600"{% endif %}>{{ item.title }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endunless %}
+      {% endfor %}
+    </aside>
+    <main class="content markdown-body">
+      {% assign crumbs = page.url | split:'/' %}
+      {% assign docs_root = site.baseurl | append: '/' %}
+      {% if page.url != docs_root and page.url contains docs_root %}
+        <nav style="font-size:.75rem; margin-bottom:1rem;">
+          <a href="/docs/">Docs</a>
+          {% capture path_acc %}/docs{% endcapture %}
+          {% for c in crumbs %}
+            {% if forloop.index0 > 1 and c != '' %}
+              {% capture path_acc %}{{ path_acc }}/{{ c }}{% endcapture %}
+               › <a href="{{ path_acc }}/">{{ c | replace:'.html','' | replace:'index','' | replace:'realworld','Real-World' | replace:'guides','Guides' | replace:'migration','Migration' | replace:'architecture','Architecture' | replace:'examples','Examples' | replace:'config','Configuration' | replace:'observability','Observability' | capitalize }}</a>
+            {% endif %}
+          {% endfor %}
+        </nav>
+      {% endif %}
+      {{ content }}
+      {% assign order = site.data.navigation.search_order %}
+      {% if page.url %}
+          {% assign current_index = -1 %}
+          {% for u in order %}
+            {% if u == page.url %}{% assign current_index = forloop.index0 %}{% endif %}
+        {% endfor %}
+        {% if current_index != -1 %}
+          <hr style="margin:2.5rem 0;" />
+          <div style="display:flex; justify-content:space-between; font-size:.85rem;">
+            <div>
+              {% if current_index > 0 %}
+                {% assign prev_url = order[current_index | minus: 1] %}
+                <a href="{{ prev_url }}">← Previous</a>
+              {% endif %}
+            </div>
+            <div>
+              {% assign next_index = current_index | plus: 1 %}
+              {% if next_index < order.size %}
+                {% assign next_url = order[next_index] %}
+                  <a href="{{ next_url }}">Next →</a>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      {% endif %}
+    </main>
+  </div>
+  <footer>
+    © {{ site.time | date: '%Y' }} Go Micro. Apache 2.0 Licensed. <a href="/docs/">Docs</a> · <a href="/docs/search.html">Search</a> · <a href="https://github.com/micro/go-micro">GitHub</a> · <a href="https://github.com/micro/go-micro/issues/new?labels=question&template=question.md" style="opacity:0.7">Support</a>
+  </footer>
+  <script>
+  (function(){
+    const key='gm.dark';
+    function apply(){
+      if(localStorage.getItem(key)==='1'){
+        document.body.classList.add('dark');
+      } else {
+        document.body.classList.remove('dark');
+      }
+    }
+    apply();
+    const btn=document.getElementById('dark-toggle');
+    if(btn){
+      btn.addEventListener('click', function(){
+        localStorage.setItem(key, localStorage.getItem(key)==='1' ? '0' : '1');
+        apply();
+      });
+    }
+    // Mobile menu toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if(menuToggle && sidebar && overlay){
+      menuToggle.addEventListener('click', function(){
+        sidebar.classList.toggle('active');
+        overlay.classList.toggle('active');
+      });
+      overlay.addEventListener('click', function(){
+        sidebar.classList.remove('active');
+        overlay.classList.remove('active');
+      });
+      // Close sidebar when clicking a link
+      sidebar.querySelectorAll('a').forEach(function(link){
+        link.addEventListener('click', function(){
+          sidebar.classList.remove('active');
+          overlay.classList.remove('active');
+        });
+      });
+    }
+  })();
+  </script>
 </body>
 </html>

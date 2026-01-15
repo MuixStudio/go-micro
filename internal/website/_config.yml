@@ -1,6 +1,14 @@
 title: Docs
 description: "A Go microservices framework"
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "" # served at root; docs under /docs/ paths
+url: "https://go-micro.dev" # domain host
 
-theme: jekyll-theme-primer
+
+# Enable syntax highlighting
+highlighter: rouge
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    line_numbers: false

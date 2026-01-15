@@ -2,6 +2,8 @@
 
 Go Micro is a framework for distributed systems development.
 
+**[📖 Documentation](https://go-micro.dev/docs/)** | [Sponsor the project](https://github.com/sponsors/micro)
+
 ## Overview
 
 Go Micro provides the core requirements for distributed systems development including RPC and Event driven communication.
@@ -47,13 +49,13 @@ in the plugins repo. State and persistence becomes a core requirement beyond pro
 
 To make use of Go Micro 
 
-```golang
-go get "go-micro.dev/v5"
+```bash
+go get go-micro.dev/v5@latest
 ```
 
 Create a service and register a handler
 
-```golang
+```go
 package main
 
 import (
@@ -89,7 +91,7 @@ func main() {
 
 Set a fixed address
 
-```golang
+```go
 service := micro.NewService(
     micro.Name("helloworld"),
     micro.Address(":8080"),
@@ -98,7 +100,7 @@ service := micro.NewService(
 
 Call it via curl
 
-```
+```bash
 curl -XPOST \
      -H 'Content-Type: application/json' \
      -H 'Micro-Endpoint: Say.Hello' \
@@ -106,15 +108,36 @@ curl -XPOST \
       http://localhost:8080
 ```
 
-## Command Line
-
-Once you've written a service you'll want to run, query and manage it, code generate protobuf. 
-
-This is where the [micro](https://github.com/micro/micro) CLI comes in. Check it out.
-
 ## Experimental
 
 There's a new `genai` package for generative AI capabilities.
+
+## Protobuf
+
+Install the code generator and see usage in the docs:
+
+```bash
+go install go-micro.dev/v5/cmd/protoc-gen-micro@latest
+```
+
+Docs: [`internal/website/docs/getting-started.md`](internal/website/docs/getting-started.md)
+
+## Command line
+
+Install the CLI and see usage in the docs:
+
+```
+go install go-micro.dev/v5/cmd/micro@latest
+```
+
+Docs: [`internal/website/docs`](internal/website/docs)
+
+Package reference: https://pkg.go.dev/go-micro.dev/v5
+
+Selected topics:
+- Getting Started: [`internal/website/docs/getting-started.md`](internal/website/docs/getting-started.md)
+- Plugins overview: [`internal/website/docs/plugins.md`](internal/website/docs/plugins.md)
+- Learn by Example: [`internal/website/docs/examples/index.md`](internal/website/docs/examples/index.md)
 
 ## Adopters
 

@@ -329,6 +329,10 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 		// Process the outbound messages from the socket
 		go func(psock *socket.Socket) {
 			defer func() {
+				if r := recover(); r != nil {
+					logger.Log(log.ErrorLevel, "panic recovered in outbound goroutine: ", r)
+					logger.Log(log.ErrorLevel, string(debug.Stack()))
+				}
 				// TODO: don't hack this but if its grpc just break out of the stream
 				// We do this because the underlying connection is h2 and its a stream
 				if protocol == "grpc" {
@@ -356,7 +360,13 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 
 		// Serve the request in a go routine as this may be a stream
 		go func(psock *socket.Socket) {
-			defer s.deferer(pool, psock, wg)
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Log(log.ErrorLevel, "panic recovered in serveReq goroutine: ", r)
+					logger.Log(log.ErrorLevel, string(debug.Stack()))
+				}
+				s.deferer(pool, psock, wg)
+			}()
 
 			s.serveReq(ctx, msg, &request, &response, rcodec)
 		}(psock)
