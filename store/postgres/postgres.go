@@ -31,8 +31,8 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
-	"go-micro.dev/v5/logger"
-	"go-micro.dev/v5/store"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/store"
 )
 
 // DefaultDatabase is the namespace that the sql store
@@ -40,15 +40,11 @@ import (
 var (
 	DefaultDatabase = "micro"
 	DefaultTable    = "micro"
-	ErrNoConnection = errors.New("Database connection not initialised")
+	ErrNoConnection = errors.New("Database connection not initialized")
 )
 
 var (
 	re = regexp.MustCompile("[^a-zA-Z0-9]+")
-
-	// alternative ordering
-	orderAsc  = "ORDER BY key ASC"
-	orderDesc = "ORDER BY key DESC"
 
 	// the sql statements we prepare and use
 	statements = map[string]string{
@@ -247,7 +243,7 @@ func (s *sqlStore) configure() error {
 	// get DB
 	database, table := s.getDB(s.options.Database, s.options.Table)
 
-	// initialise the database
+	// initialize the database
 	return s.initDB(database, table)
 }
 
@@ -370,7 +366,7 @@ func (s *sqlStore) rowToRecord(row *sql.Row) (*store.Record, error) {
 	if timehelper.Valid {
 		if timehelper.Time.Before(time.Now()) {
 			// record has expired
-			go s.Delete(record.Key)
+			go func() { _ = s.Delete(record.Key) }()
 			return nil, store.ErrNotFound
 		}
 		record.Expiry = time.Until(timehelper.Time)
@@ -398,7 +394,7 @@ func (s *sqlStore) rowsToRecords(rows *sql.Rows) ([]*store.Record, error) {
 		if timehelper.Valid {
 			if timehelper.Time.Before(time.Now()) {
 				// record has expired
-				go s.Delete(record.Key)
+				go func() { _ = s.Delete(record.Key) }()
 			} else {
 				record.Expiry = time.Until(timehelper.Time)
 				records = append(records, record)
@@ -607,7 +603,7 @@ func NewStore(opts ...store.Option) store.Store {
 
 func (s *sqlStore) expiryLoop() {
 	for {
-		s.expireRows()
+		_ = s.expireRows()
 		time.Sleep(1 * time.Hour)
 	}
 }

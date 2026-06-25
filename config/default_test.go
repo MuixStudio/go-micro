@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"go-micro.dev/v5/config/source"
-	"go-micro.dev/v5/config/source/env"
-	"go-micro.dev/v5/config/source/file"
-	"go-micro.dev/v5/config/source/memory"
+	"go-micro.dev/v6/config/source"
+	"go-micro.dev/v6/config/source/env"
+	"go-micro.dev/v6/config/source/file"
+	"go-micro.dev/v6/config/source/memory"
 )
 
 func createFileForIssue18(t *testing.T, content string) *os.File {
@@ -149,7 +149,7 @@ func TestConfigWatcherDirtyOverrite(t *testing.T) {
 
 	l := 100
 
-	ss := make([]source.Source, l, l)
+	ss := make([]source.Source, l)
 
 	for i := 0; i < l; i++ {
 		ss[i] = memory.NewSource(memory.WithJSON([]byte(fmt.Sprintf(`{"key%d": "val%d"}`, i, i))))

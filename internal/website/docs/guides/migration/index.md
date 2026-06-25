@@ -8,6 +8,8 @@ Step-by-step guides for migrating to Go Micro from other frameworks.
 
 ## Available Guides
 
+- [v5 to v6](v5-to-v6.md) - Upgrade to v6: new module path, TLS secure by default, `NewService`
+- [Add MCP to Existing Services](add-mcp.md) - Make your services AI-accessible in 5 minutes
 - [From gRPC](from-grpc.md) - Migrate from gRPC to Go Micro with minimal code changes
 
 ## Coming Soon
@@ -32,4 +34,4 @@ We're working on additional migration guides:
 - Check the [Framework Comparison](../comparison.md) guide
 - Review [Architecture Decisions](../../architecture/index.md) to understand design choices
 - Ask questions in [GitHub Discussions](https://github.com/micro/go-micro/discussions)
-- See [CONTRIBUTING.md](../../../../CONTRIBUTING.md) to contribute new migration guides
+- See the [Contributing Guide](../../contributing.md) to contribute new migration guides

@@ -4,6 +4,8 @@ layout: default
 
 # Configuration
 
+<img src="/images/generated/config.jpg" alt="Configuration" style="width: 100%; border-radius: 8px; margin: 1rem 0 1.5rem;" />
+
 Go Micro follows a progressive configuration model so you can start with zero setup and layer in complexity only when needed.
 
 ## Levels of Configuration
@@ -124,5 +126,5 @@ Load with your process manager or container orchestrator.
 ## Related
 
 - [ADR-009: Progressive Configuration](architecture/adr-009-progressive-configuration.md)
-- [Getting Started](getting-started.md)
-- [Plugins](plugins.md)
+- [Getting Started](getting-started.html)
+- [Plugins](plugins.html)

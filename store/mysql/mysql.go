@@ -7,8 +7,8 @@ import (
 	"unicode"
 
 	"github.com/pkg/errors"
-	log "go-micro.dev/v5/logger"
-	"go-micro.dev/v5/store"
+	log "go-micro.dev/v6/logger"
+	"go-micro.dev/v6/store"
 )
 
 var (
@@ -67,7 +67,7 @@ func (s *sqlStore) List(opts ...store.ListOption) ([]string, error) {
 
 		if cachedTime.Before(time.Now()) {
 			// record has expired
-			go s.Delete(record.Key)
+			go func() { _ = s.Delete(record.Key) }()
 		} else {
 			records = append(records, record.Key)
 		}
@@ -105,7 +105,7 @@ func (s *sqlStore) Read(key string, opts ...store.ReadOption) ([]*store.Record, 
 	}
 	if cachedTime.Before(time.Now()) {
 		// record has expired
-		go s.Delete(key)
+		go func() { _ = s.Delete(key) }()
 		return records, store.ErrNotFound
 	}
 	record.Expiry = time.Until(cachedTime)
@@ -158,10 +158,23 @@ func (s *sqlStore) initDB() error {
 		return errors.Wrap(err, "Couldn't create table")
 	}
 
-	// prepare
-	s.readPrepare, _ = s.db.Prepare(fmt.Sprintf("SELECT `key`, value, expiry FROM %s.%s WHERE `key` = ?;", s.database, s.table))
-	s.writePrepare, _ = s.db.Prepare(fmt.Sprintf("INSERT INTO %s.%s (`key`, value, expiry) VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE `value`= ?, `expiry` = ?", s.database, s.table))
-	s.deletePrepare, _ = s.db.Prepare(fmt.Sprintf("DELETE FROM %s.%s WHERE `key` = ?;", s.database, s.table))
+	// prepare statements
+	var prepareErr error
+
+	s.readPrepare, prepareErr = s.db.Prepare(fmt.Sprintf("SELECT `key`, value, expiry FROM %s.%s WHERE `key` = ?;", s.database, s.table))
+	if prepareErr != nil {
+		return errors.Wrap(prepareErr, "failed to prepare read statement")
+	}
+
+	s.writePrepare, prepareErr = s.db.Prepare(fmt.Sprintf("INSERT INTO %s.%s (`key`, value, expiry) VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE `value`= ?, `expiry` = ?", s.database, s.table))
+	if prepareErr != nil {
+		return errors.Wrap(prepareErr, "failed to prepare write statement")
+	}
+
+	s.deletePrepare, prepareErr = s.db.Prepare(fmt.Sprintf("DELETE FROM %s.%s WHERE `key` = ?;", s.database, s.table))
+	if prepareErr != nil {
+		return errors.Wrap(prepareErr, "failed to prepare delete statement")
+	}
 
 	return nil
 }

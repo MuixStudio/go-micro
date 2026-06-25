@@ -7,14 +7,15 @@ import (
 	"time"
 
 	natsgo "github.com/nats-io/nats.go"
-	"go-micro.dev/v5/config/source"
-	log "go-micro.dev/v5/logger"
+	"go-micro.dev/v6/config/source"
+	log "go-micro.dev/v6/logger"
 )
 
 type nats struct {
 	url    string
 	bucket string
 	key    string
+	conn   *natsgo.Conn // store connection for lifecycle management
 	kv     natsgo.KeyValue
 	opts   source.Options
 }
@@ -128,7 +129,18 @@ func NewSource(opts ...source.Option) source.Source {
 		url:    config.Url,
 		bucket: bucket,
 		key:    key,
+		conn:   nc, // store connection reference
 		kv:     kv,
 		opts:   options,
 	}
+}
+
+// Close implements io.Closer and closes the underlying NATS connection.
+// This method is optional but recommended to prevent connection leaks.
+func (n *nats) Close() error {
+	if n.conn != nil {
+		n.conn.Close()
+		n.conn = nil
+	}
+	return nil
 }

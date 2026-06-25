@@ -14,9 +14,30 @@ import (
 
 	"github.com/stretchr/objx"
 	"github.com/urfave/cli/v2"
-	"go-micro.dev/v5/client"
-	"go-micro.dev/v5/registry"
+	"go-micro.dev/v6/client"
+	"go-micro.dev/v6/metadata"
+	"go-micro.dev/v6/registry"
 )
+
+// AddMetadataToContext parses metadata strings in the format "Key:Value" and adds them to the context
+func AddMetadataToContext(ctx context.Context, metadataStrings []string) context.Context {
+	if len(metadataStrings) == 0 {
+		return ctx
+	}
+
+	md := make(metadata.Metadata)
+	for _, m := range metadataStrings {
+		parts := strings.SplitN(m, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		md[key] = value
+	}
+
+	return metadata.MergeContext(ctx, md, true)
+}
 
 // LookupService queries the service for a service with the given alias. If
 // no services are found for a given alias, the registry will return nil and
@@ -57,7 +78,7 @@ func FormatServiceUsage(srv *registry.Service, c *cli.Context) string {
 	if len(subcommand) > 0 && subcommand != "--help" {
 		result += fmt.Sprintf("NAME:\n\tmicro %v %v\n\n", alias, subcommand)
 		result += fmt.Sprintf("USAGE:\n\tmicro %v %v [flags]\n\n", alias, subcommand)
-		result += fmt.Sprintf("FLAGS:\n")
+		result += "FLAGS:\n"
 
 		for i, command := range commands {
 			if command == subcommand {
@@ -129,19 +150,29 @@ func CallService(srv *registry.Service, args []string) error {
 		}
 	}
 	if ep == nil {
-		return fmt.Errorf("Endpoint %v not found for service %v", endpoint, srv.Name)
+		return fmt.Errorf("endpoint %v not found for service %v", endpoint, srv.Name)
 	}
 
-	// parse the flags
+	// create a context for the call
+	callCtx := context.TODO()
+
+	// parse out --header or --metadata flags before parsing request body
+	// Note: This is for dynamic service calls (e.g., 'micro helloworld call --header X:Y').
+	// Direct 'micro call' commands are handled in cli.go.
+	if headerFlags, ok := flags["header"]; ok {
+		callCtx = AddMetadataToContext(callCtx, headerFlags)
+		delete(flags, "header")
+	}
+	if metadataFlags, ok := flags["metadata"]; ok {
+		callCtx = AddMetadataToContext(callCtx, metadataFlags)
+		delete(flags, "metadata")
+	}
+
+	// parse the flags into request body
 	body, err := FlagsToRequest(flags, ep.Request)
 	if err != nil {
 		return err
 	}
-
-	// create a context for the call based on the cli context
-	callCtx := context.TODO()
-
-	// TODO: parse out --header or --metadata
 
 	// construct and execute the request using the json content type
 	req := client.DefaultClient.NewRequest(srv.Name, endpoint, body, client.WithContentType("application/json"))
@@ -158,7 +189,7 @@ func CallService(srv *registry.Service, args []string) error {
 		return err
 	}
 	out.Write([]byte("\n"))
-	out.WriteTo(os.Stdout)
+	_, _ = out.WriteTo(os.Stdout)
 
 	return nil
 }
@@ -199,7 +230,7 @@ func splitCmdArgs(arguments []string) ([]string, map[string][]string, error) {
 		case 2:
 			flags[comps[0]] = append(flags[comps[0]], comps[1])
 		default:
-			return nil, nil, fmt.Errorf("Invalid flag: %v. Expected format: --foo=bar", a)
+			return nil, nil, fmt.Errorf("invalid flag: %v. Expected format: --foo=bar", a)
 		}
 	}
 
@@ -219,7 +250,7 @@ func constructEndpoint(args []string) (string, error) {
 	case 3:
 		epComps = args[1:3]
 	default:
-		return "", fmt.Errorf("Incorrect number of arguments")
+		return "", fmt.Errorf("incorrect number of arguments")
 	}
 
 	// transform the endpoint components, e.g ["helloworld", "call"] to the
@@ -352,7 +383,7 @@ func FlagsToRequest(flags map[string][]string, req *registry.Value) (map[string]
 		default:
 			return value, nil
 		}
-		return nil, nil
+
 	}
 
 	result := objx.MustFromJSON("{}")
@@ -377,7 +408,7 @@ func FlagsToRequest(flags map[string][]string, req *registry.Value) (map[string]
 	for key, value := range flags {
 		ty, found := flagType(key, req.Values)
 		if !found {
-			return nil, fmt.Errorf("Unknown flag: %v", key)
+			return nil, fmt.Errorf("unknown flag: %v", key)
 		}
 		parsed, err := coerceValue(ty, value)
 		if err != nil {
@@ -387,14 +418,14 @@ func FlagsToRequest(flags map[string][]string, req *registry.Value) (map[string]
 		// so we do that here
 		if strings.Contains(key, "-") {
 			parts := strings.Split(key, "-")
-			for i, _ := range parts {
+			for i := range parts {
 				pToCreate := strings.Join(parts[0:i], ".")
 				if i > 0 && i < len(parts) && !result.Has(pToCreate) {
 					result.Set(pToCreate, map[string]interface{}{})
 				}
 			}
 		}
-		path := strings.Replace(key, "-", ".", -1)
+		path := strings.ReplaceAll(key, "-", ".")
 		result.Set(path, parsed)
 	}
 

@@ -10,7 +10,7 @@ import (
 	"github.com/cornelk/hashmap"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
-	"go-micro.dev/v5/store"
+	"go-micro.dev/v6/store"
 )
 
 var (
@@ -110,7 +110,7 @@ func (n *natsStore) setOption(opts ...store.Option) {
 		o(&n.opts)
 	}
 
-	n.Once.Do(func() {
+	n.Do(func() {
 		n.nopts = nats.GetDefaultOptions()
 	})
 

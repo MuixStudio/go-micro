@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"go-micro.dev/v5/broker"
-	raw "go-micro.dev/v5/codec/bytes"
-	log "go-micro.dev/v5/logger"
-	"go-micro.dev/v5/metadata"
-	"go-micro.dev/v5/transport/headers"
+	"go-micro.dev/v6/broker"
+	raw "go-micro.dev/v6/codec/bytes"
+	log "go-micro.dev/v6/logger"
+	"go-micro.dev/v6/metadata"
+	"go-micro.dev/v6/transport/headers"
 )
 
 // HandleEvent handles inbound messages to the service directly.
@@ -170,7 +170,7 @@ func (s *rpcServer) reSubscribe(config Options) {
 		err = s.router.Subscribe(sb)
 		if err != nil {
 			config.Logger.Logf(log.WarnLevel, "Unable to subscribing to topic: %s, error: %s", sb.Topic(), err)
-			sub.Unsubscribe()
+			_ = sub.Unsubscribe()
 			continue
 		}
 		s.subscribers[sb] = []broker.Subscriber{sub}

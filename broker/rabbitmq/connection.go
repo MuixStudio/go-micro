@@ -5,22 +5,22 @@ package rabbitmq
 //
 
 import (
-	"crypto/tls"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go-micro.dev/v5/logger"
+	mtls "go-micro.dev/v6/internal/util/tls"
+	"go-micro.dev/v6/logger"
 )
 
 type MQExchangeType string
 
 const (
 	ExchangeTypeFanout MQExchangeType = "fanout"
-	ExchangeTypeTopic                 = "topic"
-	ExchangeTypeDirect                = "direct"
+	ExchangeTypeTopic  MQExchangeType = "topic"
+	ExchangeTypeDirect MQExchangeType = "direct"
 )
 
 var (
@@ -46,8 +46,6 @@ var (
 		Locale:    defaultLocale,
 	}
 
-	dial       = amqp.Dial
-	dialTLS    = amqp.DialTLS
 	dialConfig = amqp.DialConfig
 )
 
@@ -232,9 +230,8 @@ func (r *rabbitMQConn) tryConnect(secure bool, config *amqp.Config) error {
 
 	if secure || config.TLSClientConfig != nil || strings.HasPrefix(r.url, "amqps://") {
 		if config.TLSClientConfig == nil {
-			config.TLSClientConfig = &tls.Config{
-				InsecureSkipVerify: true,
-			}
+			// Use environment-based config - secure by default
+			config.TLSClientConfig = mtls.Config()
 		}
 
 		url = strings.Replace(r.url, "amqp://", "amqps://", 1)
@@ -252,9 +249,9 @@ func (r *rabbitMQConn) tryConnect(secure bool, config *amqp.Config) error {
 
 	if !r.withoutExchange {
 		if r.exchange.Durable {
-			r.Channel.DeclareDurableExchange(r.exchange)
+			_ = r.Channel.DeclareDurableExchange(r.exchange)
 		} else {
-			r.Channel.DeclareExchange(r.exchange)
+			_ = r.Channel.DeclareExchange(r.exchange)
 		}
 		r.ExchangeChannel, err = newRabbitChannel(r.Connection, r.prefetchCount, r.prefetchGlobal, r.confirmPublish)
 	}

@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"go-micro.dev/v5/broker"
-	"go-micro.dev/v5/codec"
-	"go-micro.dev/v5/logger"
-	"go-micro.dev/v5/registry"
-	"go-micro.dev/v5/selector"
-	"go-micro.dev/v5/transport"
+	"go-micro.dev/v6/broker"
+	"go-micro.dev/v6/codec"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/registry"
+	"go-micro.dev/v6/selector"
+	"go-micro.dev/v6/transport"
 )
 
 var (
@@ -207,7 +207,7 @@ func Registry(r registry.Registry) Option {
 	return func(o *Options) {
 		o.Registry = r
 		// set in the selector
-		o.Selector.Init(selector.Registry(r))
+		_ = o.Selector.Init(selector.Registry(r))
 	}
 }
 
@@ -398,6 +398,12 @@ func WithCache(c time.Duration) CallOption {
 func WithMessageContentType(ct string) MessageOption {
 	return func(o *MessageOptions) {
 		o.ContentType = ct
+	}
+}
+
+func WithConnectionTimeout(d time.Duration) CallOption {
+	return func(o *CallOptions) {
+		o.ConnectionTimeout = d
 	}
 }
 

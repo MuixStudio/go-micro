@@ -4,7 +4,9 @@ layout: default
 
 ## Architecture
 
-An overview of the Go Micro architecture
+<img src="/images/generated/architecture.jpg" alt="Go Micro architecture" style="width: 100%; border-radius: 8px; margin: 1rem 0 1.5rem;" />
+
+An overview of the Go Micro architecture.
 
 ## Overview
 
@@ -48,8 +50,8 @@ We will share more on architecture soon
 ## Related
 
 - [ADR Index](architecture/index.md)
-- [Configuration](config.md)
-- [Plugins](plugins.md)
+- [Configuration](config.html)
+- [Plugins](plugins.html)
 
 ## Example Usage
 
@@ -59,7 +61,7 @@ Here's a minimal Go Micro service demonstrating the architecture:
 package main
 
 import (
-    "go-micro.dev/v5"
+    "go-micro.dev/v6"
     "log"
 )
 

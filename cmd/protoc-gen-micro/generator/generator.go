@@ -1193,6 +1193,15 @@ func (g *Generator) PrintComments(path string) bool {
 	return false
 }
 
+// GetComments returns the raw leading comment text for the given path, if any.
+func (g *Generator) GetComments(path string) (string, bool) {
+	loc, ok := g.file.comments[path]
+	if !ok {
+		return "", false
+	}
+	return loc.GetLeadingComments(), true
+}
+
 // makeComments generates the comment string for the field, no "\n" at the end
 func (g *Generator) makeComments(path string) (string, bool) {
 	loc, ok := g.file.comments[path]
@@ -2004,7 +2013,7 @@ func (g *Generator) generateInternalStructFields(mc *msgCtx, topLevelFields []to
 
 }
 
-// generateOneofFuncs adds all the utility functions for oneof, including marshalling, unmarshalling and sizer.
+// generateOneofFuncs adds all the utility functions for oneof, including marshaling, unmarshalling and sizer.
 func (g *Generator) generateOneofFuncs(mc *msgCtx, topLevelFields []topLevelField) {
 	ofields := []*oneofField{}
 	for _, f := range topLevelFields {
@@ -2545,7 +2554,7 @@ func (g *Generator) generateFileDescriptor(file *FileDescriptor) {
 
 	var buf bytes.Buffer
 	w, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
-	w.Write(b)
+	_, _ = w.Write(b)
 	w.Close()
 	b = buf.Bytes()
 

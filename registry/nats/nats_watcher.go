@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"go-micro.dev/v5/registry"
+	"go-micro.dev/v6/registry"
 )
 
 type natsWatcher struct {
@@ -35,5 +35,5 @@ func (n *natsWatcher) Next() (*registry.Result, error) {
 }
 
 func (n *natsWatcher) Stop() {
-	n.sub.Unsubscribe()
+	_ = n.sub.Unsubscribe()
 }

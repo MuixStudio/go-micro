@@ -3,7 +3,6 @@ package etcd
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net"
@@ -15,8 +14,9 @@ import (
 	"time"
 
 	hash "github.com/mitchellh/hashstructure"
-	"go-micro.dev/v5/logger"
-	"go-micro.dev/v5/registry"
+	mtls "go-micro.dev/v6/internal/util/tls"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/registry"
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
@@ -53,7 +53,7 @@ func NewEtcdRegistry(opts ...registry.Option) registry.Registry {
 	if len(address) > 0 {
 		opts = append(opts, registry.Addrs(address))
 	}
-	configure(e, opts...)
+	_ = configure(e, opts...)
 	return e
 }
 
@@ -79,9 +79,8 @@ func configure(e *etcdRegistry, opts ...registry.Option) error {
 	if e.options.Secure || e.options.TLSConfig != nil {
 		tlsConfig := e.options.TLSConfig
 		if tlsConfig == nil {
-			tlsConfig = &tls.Config{
-				InsecureSkipVerify: true,
-			}
+			// Use environment-based config - secure by default
+			tlsConfig = mtls.Config()
 		}
 
 		config.TLS = tlsConfig
@@ -135,18 +134,18 @@ func encode(s *registry.Service) string {
 
 func decode(ds []byte) *registry.Service {
 	var s *registry.Service
-	json.Unmarshal(ds, &s)
+	_ = json.Unmarshal(ds, &s)
 	return s
 }
 
 func nodePath(s, id string) string {
-	service := strings.Replace(s, "/", "-", -1)
-	node := strings.Replace(id, "/", "-", -1)
+	service := strings.ReplaceAll(s, "/", "-")
+	node := strings.ReplaceAll(id, "/", "-")
 	return path.Join(prefix, service, node)
 }
 
 func servicePath(s string) string {
-	return path.Join(prefix, strings.Replace(s, "/", "-", -1))
+	return path.Join(prefix, strings.ReplaceAll(s, "/", "-"))
 }
 
 func (e *etcdRegistry) Init(opts ...registry.Option) error {
@@ -159,7 +158,7 @@ func (e *etcdRegistry) Options() registry.Options {
 
 func (e *etcdRegistry) registerNode(s *registry.Service, node *registry.Node, opts ...registry.RegisterOption) error {
 	if len(s.Nodes) == 0 {
-		return errors.New("Require at least one node")
+		return errors.New("require at least one node")
 	}
 
 	// check existing lease cache
@@ -213,14 +212,14 @@ func (e *etcdRegistry) registerNode(s *registry.Service, node *registry.Node, op
 	// renew the lease if it exists
 	if leaseID > 0 {
 		log.Logf(logger.TraceLevel, "Renewing existing lease for %s %d", s.Name, leaseID)
-		
+
 		// Start long-lived keepalive channel to reduce auth requests
 		// startKeepAlive checks if already running and is atomic
 		if err := e.startKeepAlive(s.Name+node.Id, leaseID); err != nil {
 			if err != rpctypes.ErrLeaseNotFound {
 				return err
 			}
-			
+
 			log.Logf(logger.TraceLevel, "Lease not found for %s %d", s.Name, leaseID)
 			// lease not found do register
 			leaseNotFound = true
@@ -302,19 +301,19 @@ func (e *etcdRegistry) registerNode(s *registry.Service, node *registry.Node, op
 
 func (e *etcdRegistry) Deregister(s *registry.Service, opts ...registry.DeregisterOption) error {
 	if len(s.Nodes) == 0 {
-		return errors.New("Require at least one node")
+		return errors.New("require at least one node")
 	}
 
 	for _, node := range s.Nodes {
 		key := s.Name + node.Id
-		
+
 		e.Lock()
 		// delete our hash of the service
 		delete(e.register, key)
 		// delete our lease of the service
 		delete(e.leases, key)
 		e.Unlock()
-		
+
 		// stop keepalive goroutine
 		e.stopKeepAlive(key)
 
@@ -333,7 +332,7 @@ func (e *etcdRegistry) Deregister(s *registry.Service, opts ...registry.Deregist
 
 func (e *etcdRegistry) Register(s *registry.Service, opts ...registry.RegisterOption) error {
 	if len(s.Nodes) == 0 {
-		return errors.New("Require at least one node")
+		return errors.New("require at least one node")
 	}
 
 	var gerr error
@@ -459,35 +458,65 @@ func (e *etcdRegistry) startKeepAlive(key string, leaseID clientv3.LeaseID) erro
 	e.keepaliveStop[key] = stopCh
 
 	// start goroutine to consume keepalive responses
-	go func() {
-		log := e.options.Logger
-		for {
-			select {
-			case <-stopCh:
-				log.Logf(logger.TraceLevel, "Stopping keepalive for %s", key)
-				return
-			case ka, ok := <-ch:
-				if !ok {
-					log.Logf(logger.DebugLevel, "Keepalive channel closed for %s", key)
-					e.Lock()
-					// Only delete if still present (avoid race with stopKeepAlive)
-					if _, exists := e.keepaliveChs[key]; exists {
-						delete(e.keepaliveChs, key)
-						delete(e.keepaliveStop, key)
-					}
-					e.Unlock()
-					return
-				}
-				if ka == nil {
-					log.Logf(logger.WarnLevel, "Keepalive response is nil for %s", key)
-					continue
-				}
-				log.Logf(logger.TraceLevel, "Keepalive response for %s lease %d, TTL %d", key, ka.ID, ka.TTL)
-			}
-		}
-	}()
+	go e.keepAliveLoop(key, ch, stopCh)
 
 	return nil
+}
+
+// keepAliveLoop consumes keepalive responses for a lease. It exits and
+// drops the cached lease/registration (via handleKeepAliveClosed) when
+// the keepalive channel closes OR a response reports a non-positive TTL.
+// Both mean the lease is gone — for example a network partition that
+// outlasted the TTL — so the next Register must re-create it rather than
+// be short-circuited by the "unchanged" check in registerNode. Without
+// the TTL guard a silently-expired lease (where the channel does not
+// promptly close) would leave the service de-registered from etcd while
+// the cache still believed it was registered, and nothing would repair it.
+func (e *etcdRegistry) keepAliveLoop(key string, ch <-chan *clientv3.LeaseKeepAliveResponse, stopCh chan bool) {
+	log := e.options.Logger
+	for {
+		select {
+		case <-stopCh:
+			log.Logf(logger.TraceLevel, "Stopping keepalive for %s", key)
+			return
+		case ka, ok := <-ch:
+			if !ok {
+				log.Logf(logger.DebugLevel, "Keepalive channel closed for %s", key)
+				e.handleKeepAliveClosed(key)
+				return
+			}
+			if ka == nil {
+				log.Logf(logger.WarnLevel, "Keepalive response is nil for %s", key)
+				continue
+			}
+			if ka.TTL <= 0 {
+				log.Logf(logger.WarnLevel, "Keepalive TTL expired for %s lease %d; dropping lease to force re-register", key, ka.ID)
+				e.handleKeepAliveClosed(key)
+				return
+			}
+			log.Logf(logger.TraceLevel, "Keepalive response for %s lease %d, TTL %d", key, ka.ID, ka.TTL)
+		}
+	}
+}
+
+// handleKeepAliveClosed is invoked by the keepalive goroutine when the
+// etcd client closes the KeepAlive channel (for example because the lease
+// expired on the server side during a network partition). In addition to
+// removing the channel bookkeeping, it drops the cached lease and
+// registration hash so the next registerNode() performs a full
+// Grant+Put re-registration instead of being short-circuited by the
+// "unchanged" check at the top of registerNode.
+func (e *etcdRegistry) handleKeepAliveClosed(key string) {
+	e.Lock()
+	defer e.Unlock()
+
+	// Only delete if still present to avoid racing with stopKeepAlive.
+	if _, exists := e.keepaliveChs[key]; exists {
+		delete(e.keepaliveChs, key)
+		delete(e.keepaliveStop, key)
+	}
+	delete(e.leases, key)
+	delete(e.register, key)
 }
 
 // stopKeepAlive stops the keepalive goroutine for the given key

@@ -2,32 +2,28 @@
 package new
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"go/build"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
+	"syscall"
+
+	"go-micro.dev/v6/cmd/micro/cli/generate"
 	"text/template"
 	"time"
 
 	"github.com/urfave/cli/v2"
 	"github.com/xlab/treeprint"
-	tmpl "go-micro.dev/v5/cmd/micro/cli/new/template"
+	tmpl "go-micro.dev/v6/cmd/micro/cli/new/template"
 )
-
-func protoComments(goDir, alias string) []string {
-	return []string{
-		"\ndownload protoc zip packages (protoc-$VERSION-$PLATFORM.zip) and install:\n",
-		"visit https://github.com/protocolbuffers/protobuf/releases",
-		"\ncompile the proto file " + alias + ".proto:\n",
-		"cd " + alias,
-		"go mod tidy",
-		"make proto\n",
-	}
-}
 
 type config struct {
 	// foo
@@ -40,10 +36,36 @@ type config struct {
 	GoPath string
 	// UseGoPath
 	UseGoPath bool
+	// MicroVersion is the go-micro version to require in go.mod
+	MicroVersion string
 	// Files
 	Files []file
 	// Comments
 	Comments []string
+}
+
+// microVersion returns the go-micro version this CLI was built from, so a
+// generated service requires the same framework version the user is running.
+// Falls back to "latest" for local/dev builds (resolved by 'go mod tidy').
+func microVersion() string {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "latest"
+	}
+	isRelease := func(v string) bool {
+		return strings.HasPrefix(v, "v") && !strings.Contains(v, "devel")
+	}
+	// cmd/micro is part of the go-micro.dev/v6 module, so for an installed
+	// binary the main module version is the framework version.
+	if bi.Main.Path == "go-micro.dev/v6" && isRelease(bi.Main.Version) {
+		return bi.Main.Version
+	}
+	for _, dep := range bi.Deps {
+		if dep.Path == "go-micro.dev/v6" && isRelease(dep.Version) {
+			return dep.Version
+		}
+	}
+	return "latest"
 }
 
 type file struct {
@@ -84,7 +106,10 @@ func create(c config) error {
 		return fmt.Errorf("%s already exists", c.Dir)
 	}
 
-	fmt.Printf("Creating service %s\n\n", c.Alias)
+	fmt.Println()
+	fmt.Println("  \033[1mmicro new\033[0m")
+	fmt.Println()
+	fmt.Printf("  Creating \033[36m%s\033[0m\n\n", c.Alias)
 
 	t := treeprint.New()
 
@@ -135,6 +160,11 @@ func addFileToTree(root treeprint.Tree, file string) {
 }
 
 func Run(ctx *cli.Context) error {
+	// Handle --prompt: design services with AI, then generate each one
+	if prompt := ctx.String("prompt"); prompt != "" {
+		return runPrompt(ctx, prompt)
+	}
+
 	dir := ctx.Args().First()
 	if len(dir) == 0 {
 		fmt.Println("specify service name")
@@ -146,13 +176,6 @@ func Run(ctx *cli.Context) error {
 	if path.IsAbs(dir) {
 		fmt.Println("require relative path as service will be installed in GOPATH")
 		return nil
-	}
-
-	// Check for protoc
-	if _, err := exec.LookPath("protoc"); err != nil {
-		fmt.Println("WARNING: protoc is not installed or not in your PATH.")
-		fmt.Println("Please install protoc from https://github.com/protocolbuffers/protobuf/releases")
-		fmt.Println("After installing, re-run 'make proto' in your service directory if needed.")
 	}
 
 	var goPath string
@@ -174,26 +197,56 @@ func Run(ctx *cli.Context) error {
 	}
 	goDir = filepath.Join(goPath, "src", path.Clean(dir))
 
+	noMCP := ctx.Bool("no-mcp")
+	templateName := ctx.String("template")
+
+	// The default template is protoless: handlers are registered by
+	// reflection, so the service builds and runs with no protoc toolchain.
+	// --proto opts into Protocol Buffers; the named templates (crud, pubsub,
+	// api) are proto-based and imply it.
+	useProto := ctx.Bool("proto") || (templateName != "" && templateName != "default")
+
 	c := config{
-		Alias:     dir,
-		Comments:  nil, // Remove redundant protoComments
-		Dir:       dir,
-		GoDir:     goDir,
-		GoPath:    goPath,
-		UseGoPath: false,
-		Files: []file{
-			{"main.go", tmpl.MainSRV},
-			{"handler/" + dir + ".go", tmpl.HandlerSRV},
-			{"proto/" + dir + ".proto", tmpl.ProtoSRV},
+		Alias:        dir,
+		Comments:     nil,
+		Dir:          dir,
+		GoDir:        goDir,
+		GoPath:       goPath,
+		UseGoPath:    false,
+		MicroVersion: microVersion(),
+	}
+
+	if useProto {
+		mainTmpl, handlerTmpl, protoTmpl := selectTemplates(templateName, noMCP)
+		c.Files = []file{
+			{"main.go", mainTmpl},
+			{"handler/" + dir + ".go", handlerTmpl},
+			{"proto/" + dir + ".proto", protoTmpl},
 			{"Makefile", tmpl.Makefile},
 			{"README.md", tmpl.Readme},
 			{".gitignore", tmpl.GitIgnore},
-		},
+		}
+	} else {
+		mainTmpl := tmpl.MainNoProto
+		if noMCP {
+			mainTmpl = tmpl.MainNoProtoNoMCP
+		}
+		c.Files = []file{
+			{"main.go", mainTmpl},
+			{"handler/" + dir + ".go", tmpl.HandlerNoProto},
+			{"Makefile", tmpl.MakefileNoProto},
+			{"README.md", tmpl.ReadmeNoProto},
+			{".gitignore", tmpl.GitIgnore},
+		}
 	}
 
 	// set gomodule
 	if os.Getenv("GO111MODULE") != "off" {
-		c.Files = append(c.Files, file{"go.mod", tmpl.Module})
+		mod := tmpl.ModuleNoProto
+		if useProto {
+			mod = tmpl.Module
+		}
+		c.Files = append(c.Files, file{"go.mod", mod})
 	}
 
 	// create the files
@@ -201,21 +254,102 @@ func Run(ctx *cli.Context) error {
 		return err
 	}
 
-	// Run go mod tidy and make proto
-	fmt.Println("\nRunning 'go mod tidy' and 'make proto'...")
+	// Resolve dependencies.
+	fmt.Println("\nRunning 'go mod tidy'...")
 	if err := runInDir(dir, "go mod tidy"); err != nil {
 		fmt.Printf("Error running 'go mod tidy': %v\n", err)
 	}
-	if err := runInDir(dir, "make proto"); err != nil {
-		fmt.Printf("Error running 'make proto': %v\n", err)
+
+	// Generate protobuf code only when the proto workflow is used, and only
+	// when the toolchain is present. Otherwise print install instructions
+	// rather than failing with a cryptic error.
+	if useProto {
+		if missing := missingProtoTools(); len(missing) > 0 {
+			printProtoInstall(dir, missing)
+		} else {
+			fmt.Println("Running 'make proto'...")
+			if err := runInDir(dir, "make proto"); err != nil {
+				fmt.Printf("Error running 'make proto': %v\n", err)
+			}
+		}
 	}
 
 	// Print updated tree including generated files
-	fmt.Println("\nProject structure after 'make proto':")
+	fmt.Println("\nProject structure:")
 	printTree(dir)
 
-	fmt.Println("\nService created successfully! Start coding in your new service directory.")
+	fmt.Println()
+	fmt.Printf("  \033[32m✓\033[0m Service \033[36m%s\033[0m created\n\n", dir)
+	fmt.Println("  Next steps:")
+	fmt.Printf("    cd %s\n", dir)
+	fmt.Println("    go run .")
+	if !noMCP {
+		fmt.Println()
+		fmt.Printf("    MCP tools   \033[36mhttp://localhost:3001/mcp/tools\033[0m\n")
+		fmt.Println("    Claude Code \033[2mmicro mcp serve\033[0m")
+	}
+	fmt.Println()
 	return nil
+}
+
+func selectTemplates(name string, noMCP bool) (mainTmpl, handlerTmpl, protoTmpl string) {
+	switch name {
+	case "crud":
+		if noMCP {
+			mainTmpl = tmpl.MainSRVNoMCP
+		} else {
+			mainTmpl = tmpl.MainSRV
+		}
+		return mainTmpl, tmpl.CrudHandlerSRV, tmpl.CrudProtoSRV
+	case "pubsub":
+		if noMCP {
+			mainTmpl = tmpl.PubsubMainSRVNoMCP
+		} else {
+			mainTmpl = tmpl.PubsubMainSRV
+		}
+		return mainTmpl, tmpl.PubsubHandlerSRV, tmpl.PubsubProtoSRV
+	case "api":
+		if noMCP {
+			mainTmpl = tmpl.MainSRVNoMCP
+		} else {
+			mainTmpl = tmpl.MainSRV
+		}
+		return mainTmpl, tmpl.ApiHandlerSRV, tmpl.ApiProtoSRV
+	default:
+		if noMCP {
+			mainTmpl = tmpl.MainSRVNoMCP
+		} else {
+			mainTmpl = tmpl.MainSRV
+		}
+		return mainTmpl, tmpl.HandlerSRV, tmpl.ProtoSRV
+	}
+}
+
+// missingProtoTools returns the protobuf tools needed by `make proto` that
+// are not on the PATH.
+func missingProtoTools() []string {
+	var missing []string
+	for _, tool := range []string{"protoc", "protoc-gen-go", "protoc-gen-micro"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			missing = append(missing, tool)
+		}
+	}
+	return missing
+}
+
+// printProtoInstall tells the user exactly what to install to generate the
+// protobuf code, instead of failing with a cryptic plugin error.
+func printProtoInstall(dir string, missing []string) {
+	fmt.Println()
+	fmt.Printf("  \033[33m!\033[0m This service uses Protocol Buffers, but these tools are missing: %s\n", strings.Join(missing, ", "))
+	fmt.Println()
+	fmt.Println("  Install them:")
+	fmt.Println("    protoc            https://github.com/protocolbuffers/protobuf/releases (or via your package manager)")
+	fmt.Println("    protoc-gen-go     go install google.golang.org/protobuf/cmd/protoc-gen-go@latest")
+	fmt.Println("    protoc-gen-micro  go install go-micro.dev/v6/cmd/protoc-gen-micro@latest")
+	fmt.Println()
+	fmt.Printf("  Then generate the code:\n    cd %s && make proto && go run .\n", dir)
+	fmt.Println()
 }
 
 func runInDir(dir, cmd string) error {
@@ -252,6 +386,79 @@ func printTree(dir string) {
 		}
 		return nil
 	}
-	filepath.Walk(dir, walk)
+	_ = filepath.Walk(dir, walk)
 	fmt.Println(t.String())
+}
+
+func runPrompt(cliCtx *cli.Context, prompt string) error {
+	provider := cliCtx.String("provider")
+	apiKey := cliCtx.String("api_key")
+	if apiKey == "" {
+		// Try provider-specific env vars
+		for _, env := range []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
+			"ATLASCLOUD_API_KEY", "GROQ_API_KEY", "MISTRAL_API_KEY", "TOGETHER_API_KEY", "MICRO_AI_API_KEY"} {
+			if v := os.Getenv(env); v != "" {
+				apiKey = v
+				break
+			}
+		}
+	}
+	if apiKey == "" {
+		return fmt.Errorf("--api_key or a provider API key env var is required for --prompt")
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	fmt.Println()
+	fmt.Println("  \033[1mmicro new --prompt\033[0m")
+	fmt.Println()
+	fmt.Printf("  \033[2mDesigning services for:\033[0m %s\n\n", prompt)
+
+	design, err := generate.Design(ctx, provider, apiKey, "", ".", prompt)
+	if err != nil {
+		return fmt.Errorf("design failed: %w", err)
+	}
+
+	fmt.Println("  Services:")
+	for _, svc := range design.Services {
+		fmt.Printf("    \033[32m●\033[0m \033[36m%s\033[0m — %s\n", svc.Name, svc.Description)
+		for _, ep := range svc.Endpoints {
+			fmt.Printf("      %s: %s\n", ep.Name, ep.Description)
+		}
+	}
+	fmt.Println()
+
+	if !confirmGenerate() {
+		fmt.Println("  Canceled.")
+		return nil
+	}
+
+	fmt.Println("  Generating code...")
+	if err := generate.Generate(ctx, ".", design, provider, apiKey, ""); err != nil {
+		return fmt.Errorf("generate failed: %w", err)
+	}
+
+	for _, svc := range design.Services {
+		fmt.Printf("    \033[32m✓\033[0m %s/\n", svc.Name)
+	}
+	fmt.Println()
+
+	fmt.Println("  \033[32m✓\033[0m All services generated")
+	fmt.Println()
+	fmt.Println("  Next steps:")
+	fmt.Println("    micro run                          \033[2m# start all services\033[0m")
+	fmt.Println("    micro chat --provider anthropic    \033[2m# talk to them\033[0m")
+	fmt.Println()
+	return nil
+}
+
+func confirmGenerate() bool {
+	fmt.Print("  Generate? [Y/n] ")
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return false
+	}
+	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+	return answer == "" || answer == "y" || answer == "yes"
 }

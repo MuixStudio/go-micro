@@ -6,9 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"go-micro.dev/v5/cmd/protoc-gen-micro/generator"
-	options "google.golang.org/genproto/googleapis/api/annotations"
-	"google.golang.org/protobuf/proto"
+	"go-micro.dev/v6/cmd/protoc-gen-micro/generator"
 	pb "google.golang.org/protobuf/types/descriptorpb"
 )
 
@@ -16,8 +14,9 @@ import (
 // relative to the import_prefix of the generator.Generator.
 const (
 	contextPkgPath = "context"
-	clientPkgPath  = "go-micro.dev/v5/client"
-	serverPkgPath  = "go-micro.dev/v5/server"
+	clientPkgPath  = "go-micro.dev/v6/client"
+	serverPkgPath  = "go-micro.dev/v6/server"
+	modelPkgPath   = "go-micro.dev/v6/model"
 )
 
 func init() {
@@ -42,6 +41,7 @@ var (
 	contextPkg string
 	clientPkg  string
 	serverPkg  string
+	modelPkg   string
 	pkgImports map[generator.GoPackageName]bool
 )
 
@@ -51,6 +51,7 @@ func (g *micro) Init(gen *generator.Generator) {
 	contextPkg = generator.RegisterUniquePackageName("context", nil)
 	clientPkg = generator.RegisterUniquePackageName("client", nil)
 	serverPkg = generator.RegisterUniquePackageName("server", nil)
+	modelPkg = generator.RegisterUniquePackageName("model", nil)
 }
 
 // Given a type name defined in a .proto, return its object.
@@ -70,29 +71,66 @@ func (g *micro) P(args ...interface{}) { g.gen.P(args...) }
 
 // Generate generates code for the services in the given file.
 func (g *micro) Generate(file *generator.FileDescriptor) {
-	if len(file.FileDescriptorProto.Service) == 0 {
+	// Check if any messages have @model annotation
+	hasModels := false
+	for i := range file.MessageType {
+		if g.isModelMessage(i) {
+			hasModels = true
+			break
+		}
+	}
+
+	if len(file.Service) == 0 && !hasModels {
 		return
 	}
+
 	g.P("// Reference imports to suppress errors if they are not otherwise used.")
 	g.P("var _ ", contextPkg, ".Context")
-	g.P("var _ ", clientPkg, ".Option")
-	g.P("var _ ", serverPkg, ".Option")
+	if len(file.Service) > 0 {
+		g.P("var _ ", clientPkg, ".Option")
+		g.P("var _ ", serverPkg, ".Option")
+	}
+	if hasModels {
+		g.P("var _ ", modelPkg, ".Database")
+	}
 	g.P()
 
-	for i, service := range file.FileDescriptorProto.Service {
+	for i, service := range file.Service {
 		g.generateService(file, service, i)
+	}
+
+	// Generate model structs for @model annotated messages
+	for i, msg := range file.MessageType {
+		if g.isModelMessage(i) {
+			g.generateModel(msg, i)
+		}
 	}
 }
 
 // GenerateImports generates the import declaration for this file.
 func (g *micro) GenerateImports(file *generator.FileDescriptor, imports map[generator.GoImportPath]generator.GoPackageName) {
-	if len(file.FileDescriptorProto.Service) == 0 {
+	hasServices := len(file.Service) > 0
+	hasModels := false
+	for i := range file.MessageType {
+		if g.isModelMessage(i) {
+			hasModels = true
+			break
+		}
+	}
+
+	if !hasServices && !hasModels {
 		return
 	}
+
 	g.P("import (")
 	g.P(contextPkg, " ", strconv.Quote(path.Join(g.gen.ImportPrefix, contextPkgPath)))
-	g.P(clientPkg, " ", strconv.Quote(path.Join(g.gen.ImportPrefix, clientPkgPath)))
-	g.P(serverPkg, " ", strconv.Quote(path.Join(g.gen.ImportPrefix, serverPkgPath)))
+	if hasServices {
+		g.P(clientPkg, " ", strconv.Quote(path.Join(g.gen.ImportPrefix, clientPkgPath)))
+		g.P(serverPkg, " ", strconv.Quote(path.Join(g.gen.ImportPrefix, serverPkgPath)))
+	}
+	if hasModels {
+		g.P(modelPkg, " ", strconv.Quote(path.Join(g.gen.ImportPrefix, modelPkgPath)))
+	}
 	g.P(")")
 	g.P()
 
@@ -234,51 +272,9 @@ func (g *micro) generateService(file *generator.FileDescriptor, service *pb.Serv
 	g.P("}")
 
 	// Server handler implementations.
-	var handlerNames []string
 	for _, method := range service.Method {
-		hname := g.generateServerMethod(servName, method)
-		handlerNames = append(handlerNames, hname)
+		g.generateServerMethod(servName, method)
 	}
-}
-
-// generateEndpoint creates the api endpoint
-func (g *micro) generateEndpoint(servName string, method *pb.MethodDescriptorProto) {
-	if method.Options == nil || !proto.HasExtension(method.Options, options.E_Http) {
-		return
-	}
-	// http rules
-	r := proto.GetExtension(method.Options, options.E_Http)
-	rule := r.(*options.HttpRule)
-	var meth string
-	var path string
-	switch {
-	case len(rule.GetDelete()) > 0:
-		meth = "DELETE"
-		path = rule.GetDelete()
-	case len(rule.GetGet()) > 0:
-		meth = "GET"
-		path = rule.GetGet()
-	case len(rule.GetPatch()) > 0:
-		meth = "PATCH"
-		path = rule.GetPatch()
-	case len(rule.GetPost()) > 0:
-		meth = "POST"
-		path = rule.GetPost()
-	case len(rule.GetPut()) > 0:
-		meth = "PUT"
-		path = rule.GetPut()
-	}
-	if len(meth) == 0 || len(path) == 0 {
-		return
-	}
-	// TODO: process additional bindings
-	g.P("Name:", fmt.Sprintf(`"%s.%s",`, servName, method.GetName()))
-	g.P("Path:", fmt.Sprintf(`[]string{"%s"},`, path))
-	g.P("Method:", fmt.Sprintf(`[]string{"%s"},`, meth))
-	if method.GetServerStreaming() || method.GetClientStreaming() {
-		g.P("Stream: true,")
-	}
-	g.P(`Handler: "rpc",`)
 }
 
 // generateClientSignature returns the client-side signature for a method.
@@ -528,4 +524,188 @@ func (g *micro) generateServerMethod(servName string, method *pb.MethodDescripto
 	}
 
 	return hname
+}
+
+// isModelMessage checks if the message at the given index has a // @model annotation.
+// Path "4,<index>" refers to message_type[index] in FileDescriptorProto.
+func (g *micro) isModelMessage(msgIndex int) bool {
+	commentPath := fmt.Sprintf("4,%d", msgIndex)
+	comment, ok := g.gen.GetComments(commentPath)
+	if !ok {
+		return false
+	}
+	return strings.Contains(comment, "@model")
+}
+
+// parseModelOptions extracts options from the @model annotation comment.
+// Supports: @model, @model(table=my_table), @model(key=custom_id)
+func parseModelOptions(comment string) (table string, key string) {
+	idx := strings.Index(comment, "@model")
+	if idx < 0 {
+		return "", ""
+	}
+	rest := comment[idx+len("@model"):]
+	rest = strings.TrimSpace(rest)
+	if !strings.HasPrefix(rest, "(") {
+		return "", ""
+	}
+	end := strings.Index(rest, ")")
+	if end < 0 {
+		return "", ""
+	}
+	opts := rest[1:end]
+	for _, part := range strings.Split(opts, ",") {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		switch strings.TrimSpace(kv[0]) {
+		case "table":
+			table = strings.TrimSpace(kv[1])
+		case "key":
+			key = strings.TrimSpace(kv[1])
+		}
+	}
+	return table, key
+}
+
+// protoFieldGoType returns the Go type string for a proto field for use in model structs.
+// Only supports scalar types (no nested messages or enums in model structs).
+func protoFieldGoType(field *pb.FieldDescriptorProto) string {
+	switch field.GetType() {
+	case pb.FieldDescriptorProto_TYPE_DOUBLE:
+		return "float64"
+	case pb.FieldDescriptorProto_TYPE_FLOAT:
+		return "float32"
+	case pb.FieldDescriptorProto_TYPE_INT64, pb.FieldDescriptorProto_TYPE_SINT64, pb.FieldDescriptorProto_TYPE_SFIXED64:
+		return "int64"
+	case pb.FieldDescriptorProto_TYPE_UINT64, pb.FieldDescriptorProto_TYPE_FIXED64:
+		return "uint64"
+	case pb.FieldDescriptorProto_TYPE_INT32, pb.FieldDescriptorProto_TYPE_SINT32, pb.FieldDescriptorProto_TYPE_SFIXED32:
+		return "int32"
+	case pb.FieldDescriptorProto_TYPE_UINT32, pb.FieldDescriptorProto_TYPE_FIXED32:
+		return "uint32"
+	case pb.FieldDescriptorProto_TYPE_BOOL:
+		return "bool"
+	case pb.FieldDescriptorProto_TYPE_STRING:
+		return "string"
+	case pb.FieldDescriptorProto_TYPE_BYTES:
+		return "[]byte"
+	default:
+		return "string"
+	}
+}
+
+// generateModel generates the model struct, factory, and proto conversion for a message.
+func (g *micro) generateModel(msg *pb.DescriptorProto, msgIndex int) {
+	msgName := generator.CamelCase(msg.GetName())
+	modelName := msgName + "Model"
+
+	// Parse options from comment
+	commentPath := fmt.Sprintf("4,%d", msgIndex)
+	comment, _ := g.gen.GetComments(commentPath)
+	tableName, keyField := parseModelOptions(comment)
+
+	// Default table: lowercase message name + "s"
+	if tableName == "" {
+		tableName = strings.ToLower(msg.GetName()) + "s"
+	}
+
+	// Default key: first field, or "id" if a field named "id" exists
+	if keyField == "" {
+		for _, field := range msg.Field {
+			if field.GetName() == "id" {
+				keyField = "id"
+				break
+			}
+		}
+		if keyField == "" && len(msg.Field) > 0 {
+			keyField = msg.Field[0].GetName()
+		}
+	}
+
+	// Filter to scalar fields only (skip nested messages, maps, oneofs)
+	type modelField struct {
+		goName   string
+		jsonName string
+		goType   string
+		isKey    bool
+		proto    *pb.FieldDescriptorProto
+	}
+	var fields []modelField
+	for _, field := range msg.Field {
+		ft := field.GetType()
+		// Skip message and enum types (not directly storable as scalars)
+		if ft == pb.FieldDescriptorProto_TYPE_MESSAGE || ft == pb.FieldDescriptorProto_TYPE_GROUP {
+			continue
+		}
+		// Skip repeated fields (slices aren't directly storable)
+		if field.GetLabel() == pb.FieldDescriptorProto_LABEL_REPEATED {
+			continue
+		}
+		goName := generator.CamelCase(field.GetName())
+		jsonName := field.GetJsonName()
+		if jsonName == "" {
+			jsonName = field.GetName()
+		}
+		fields = append(fields, modelField{
+			goName:   goName,
+			jsonName: jsonName,
+			goType:   protoFieldGoType(field),
+			isKey:    field.GetName() == keyField,
+			proto:    field,
+		})
+	}
+
+	if len(fields) == 0 {
+		return
+	}
+
+	// Generate model struct
+	g.P()
+	g.P("// ", modelName, " is a model struct generated from ", msgName, ".")
+	g.P("// Use New", modelName, " to create a typed table backed by any model.Model.")
+	g.P("type ", modelName, " struct {")
+	for _, f := range fields {
+		tags := fmt.Sprintf("`json:%q", f.jsonName)
+		if f.isKey {
+			tags += ` model:"key"`
+		}
+		tags += "`"
+		g.P(f.goName, " ", f.goType, " ", tags)
+	}
+	g.P("}")
+	g.P()
+
+	// Generate Register helper: RegisterXModel(db) registers the model with the given backend.
+	g.P("// Register", modelName, " registers the ", modelName, " table with the given model backend.")
+	g.P("func Register", modelName, "(db ", modelPkg, ".Model) error {")
+	g.P("return db.Register(&", modelName, "{}, ", modelPkg, `.WithTable("`, tableName, `"))`)
+	g.P("}")
+	g.P()
+
+	// Generate FromProto: XModelFromProto(*X) *XModel
+	g.P("// ", modelName, "FromProto converts a ", msgName, " proto message to a ", modelName, ".")
+	g.P("func ", modelName, "FromProto(p *", msgName, ") *", modelName, " {")
+	g.P("if p == nil { return nil }")
+	g.P("return &", modelName, "{")
+	for _, f := range fields {
+		getter := "Get" + f.goName
+		g.P(f.goName, ": p.", getter, "(),")
+	}
+	g.P("}")
+	g.P("}")
+	g.P()
+
+	// Generate ToProto: (*XModel).ToProto() *X
+	g.P("// ToProto converts a ", modelName, " to a ", msgName, " proto message.")
+	g.P("func (m *", modelName, ") ToProto() *", msgName, " {")
+	g.P("if m == nil { return nil }")
+	g.P("return &", msgName, "{")
+	for _, f := range fields {
+		g.P(f.goName, ": m.", f.goName, ",")
+	}
+	g.P("}")
+	g.P("}")
+	g.P()
 }

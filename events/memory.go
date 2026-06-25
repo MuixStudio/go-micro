@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go-micro.dev/v5/logger"
-	"go-micro.dev/v5/store"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/store"
 )
 
 // NewStream returns an initialized memory stream
@@ -108,7 +108,9 @@ func (m *mem) Consume(topic string, opts ...ConsumeOption) (<-chan Event, error)
 	for _, o := range opts {
 		o(&options)
 	}
-	// TODO RetryLimit
+
+	// Note: RetryLimit is configured but retry logic is basic for the in-memory implementation.
+	// For production use with advanced retry capabilities, use NATS JetStream.
 
 	// setup the subscriber
 	sub := &subscriber{

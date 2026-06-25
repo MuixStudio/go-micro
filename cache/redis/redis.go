@@ -5,7 +5,7 @@ import (
 	"time"
 
 	rclient "github.com/go-redis/redis/v8"
-	"go-micro.dev/v5/cache"
+	"go-micro.dev/v6/cache"
 )
 
 // NewRedisCache returns a new redis cache.
@@ -52,6 +52,6 @@ func (c *redisCache) Delete(ctx context.Context, key string) error {
 	return c.client.Del(ctx, key).Err()
 }
 
-func (m *redisCache) String() string {
+func (c *redisCache) String() string {
 	return "redis"
 }

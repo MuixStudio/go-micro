@@ -1,0 +1,59 @@
+name: Harness (E2E)
+
+# Runs the end-to-end harnesses for agents, services, flows, and provider
+# conformance. The default job uses deterministic mock LLMs and needs no
+# secrets. A second job runs the same harnesses against any live providers
+# whose API key secrets are configured.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  schedule:
+    - cron: "17 6 * * *" # daily, so the world is exercised even without changes
+  workflow_dispatch:
+
+jobs:
+  harness:
+    name: Harnesses (mock LLM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - name: Build
+        run: go build ./...
+      - name: Universe end-to-end (asserts; exits non-zero on failure)
+        run: go run ./internal/harness/universe
+      - name: Agent-flow harness
+        run: go run ./internal/harness/agent-flow
+      - name: Plan-delegate harness
+        run: go run ./internal/harness/plan-delegate
+
+  harness-live:
+    name: Provider harnesses (live LLM, if keys present)
+    runs-on: ubuntu-latest
+    # Only on the daily schedule or a manual run — never automatically on
+    # every push/PR, so changes don't quietly burn API credits. Trigger it
+    # by hand (Actions → Harness → Run workflow) when changing the agent,
+    # flow, or AI internals and you want a real-model check.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - name: Provider conformance against configured live models
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
+          ATLASCLOUD_API_KEY: ${{ secrets.ATLASCLOUD_API_KEY }}
+        run: go run ./internal/harness/provider-conformance

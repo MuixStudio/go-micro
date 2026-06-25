@@ -3,11 +3,11 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"go-micro.dev/v5/config/loader"
-	"go-micro.dev/v5/config/loader/memory"
-	"go-micro.dev/v5/config/reader"
-	"go-micro.dev/v5/config/reader/json"
-	"go-micro.dev/v5/config/source"
+	"go-micro.dev/v6/config/loader"
+	"go-micro.dev/v6/config/loader/memory"
+	"go-micro.dev/v6/config/reader"
+	"go-micro.dev/v6/config/reader/json"
+	"go-micro.dev/v6/config/source"
 	"sync"
 	"time"
 )
@@ -213,8 +213,6 @@ func (c *config) Set(val interface{}, path ...string) {
 	if c.vals != nil {
 		c.vals.Set(val, path...)
 	}
-
-	return
 }
 
 func (c *config) Del(path ...string) {
@@ -224,8 +222,6 @@ func (c *config) Del(path ...string) {
 	if c.vals != nil {
 		c.vals.Del(path...)
 	}
-
-	return
 }
 
 func (c *config) Bytes() []byte {

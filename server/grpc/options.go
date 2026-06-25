@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"time"
 
-	"go-micro.dev/v5/broker"
-	"go-micro.dev/v5/codec"
-	"go-micro.dev/v5/logger"
-	"go-micro.dev/v5/registry"
-	"go-micro.dev/v5/server"
-	"go-micro.dev/v5/transport"
+	"go-micro.dev/v6/broker"
+	"go-micro.dev/v6/codec"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/registry"
+	"go-micro.dev/v6/server"
+	"go-micro.dev/v6/transport"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 )
@@ -22,6 +23,7 @@ type maxMsgSizeKey struct{}
 type maxConnKey struct{}
 type tlsAuth struct{}
 type grpcServerKey struct{}
+type gracefulStopTimeoutKey struct{}
 
 // gRPC Codec to be used to encode/decode requests for a given content type.
 func Codec(contentType string, c encoding.Codec) server.Option {
@@ -70,6 +72,11 @@ func Options(opts ...grpc.ServerOption) server.Option {
 // send.  Default maximum message size is 4 MB.
 func MaxMsgSize(s int) server.Option {
 	return setServerOption(maxMsgSizeKey{}, s)
+}
+
+// GracefulStopTimeout sets how long Stop waits for active RPCs before forcing Stop.
+func GracefulStopTimeout(timeout time.Duration) server.Option {
+	return setServerOption(gracefulStopTimeoutKey{}, timeout)
 }
 
 func newOptions(opt ...server.Option) server.Options {

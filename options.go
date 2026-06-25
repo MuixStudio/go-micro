@@ -1,7 +1,7 @@
 package micro
 
 import (
-	"go-micro.dev/v5/service"
+	"go-micro.dev/v6/service"
 )
 
 var Broker = service.Broker
@@ -14,6 +14,7 @@ var HandleSignal = service.HandleSignal
 var Profile = service.Profile
 var Server = service.Server
 var Store = service.Store
+var Model = service.Model
 var Registry = service.Registry
 var Tracer = service.Tracer
 var Auth = service.Auth

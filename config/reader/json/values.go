@@ -8,8 +8,8 @@ import (
 	"time"
 
 	simple "github.com/bitly/go-simplejson"
-	"go-micro.dev/v5/config/reader"
-	"go-micro.dev/v5/config/source"
+	"go-micro.dev/v6/config/reader"
+	"go-micro.dev/v6/config/source"
 )
 
 type jsonValues struct {
@@ -58,7 +58,6 @@ func (j *jsonValues) Del(path ...string) {
 	vals := j.sj.GetPath(path[:len(path)-1]...)
 	vals.Del(path[len(path)-1])
 	j.sj.SetPath(path[:len(path)-1], vals.Interface())
-	return
 }
 
 func (j *jsonValues) Set(val interface{}, path ...string) {
@@ -126,7 +125,7 @@ func (j *jsonValue) Int(def int) int {
 }
 
 func (j *jsonValue) String(def string) string {
-	return j.Json.MustString(def)
+	return j.MustString(def)
 }
 
 func (j *jsonValue) Float64(def float64) float64 {
@@ -170,11 +169,11 @@ func (j *jsonValue) StringSlice(def []string) []string {
 			return sl
 		}
 	}
-	return j.Json.MustStringArray(def)
+	return j.MustStringArray(def)
 }
 
 func (j *jsonValue) StringMap(def map[string]string) map[string]string {
-	m, err := j.Json.Map()
+	m, err := j.Map()
 	if err != nil {
 		return def
 	}
@@ -189,7 +188,7 @@ func (j *jsonValue) StringMap(def map[string]string) map[string]string {
 }
 
 func (j *jsonValue) Scan(v interface{}) error {
-	b, err := j.Json.MarshalJSON()
+	b, err := j.MarshalJSON()
 	if err != nil {
 		return err
 	}
@@ -200,7 +199,7 @@ func (j *jsonValue) Bytes() []byte {
 	b, err := j.Json.Bytes()
 	if err != nil {
 		// try return marshaled
-		b, err = j.Json.MarshalJSON()
+		b, err = j.MarshalJSON()
 		if err != nil {
 			return []byte{}
 		}

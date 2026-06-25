@@ -4,235 +4,223 @@ layout: default
 
 # Getting Started
 
-To make use of Go Micro 
+<img src="/images/generated/getting-started.jpg" alt="Getting started with Go Micro" style="width: 100%; border-radius: 8px; margin-bottom: 1.5rem;" />
+
+Go Micro has three core abstractions:
+
+| Abstraction | What | Constructor |
+|-------------|------|-------------|
+| **Service** | Capability — endpoints, data, business logic | `micro.NewService("task")` |
+| **Agent** | Intelligence — manages services with an LLM | `micro.NewAgent("task-mgr")` |
+| **Flow** | Orchestration — event-driven LLM triggers | `micro.NewFlow("onboard")` |
+
+## Prerequisites
+
+- **Go 1.21+** for development. The `curl` install below gives you the `micro` binary without Go, but `micro run` compiles your services, so you'll want Go installed to build them.
+- An **LLM provider key** (Anthropic, OpenAI, Gemini, …) *only* for the AI features — `micro run --prompt`, `micro chat`, and agents. Plain services need no key. Set it before running, e.g. `export ANTHROPIC_API_KEY=sk-ant-...`.
+
+## Install
 
 ```bash
-go get go-micro.dev/v5@latest
+# Binary (no Go required)
+curl -fsSL https://go-micro.dev/install.sh | sh
+
+# Or with Go
+go install go-micro.dev/v6/cmd/micro@v6
 ```
 
-## Create a service
+> Use `@v6` (not `@latest`). It selects the newest `v6.x.x` release. Plain `@latest` can currently resolve to a stale pre-rename tag through the public module proxy and fail with a "version constraints conflict"; `@v6` avoids that. To pin an exact version use e.g. `@v6.2.0` (see [releases](https://github.com/micro/go-micro/releases)).
 
-This is a basic example of how you'd create a service and register a handler in pure Go.
+## Quick Start: Generate from a Prompt
+
+Describe what you need. The AI designs services, writes handlers, compiles, and starts them:
 
 ```bash
-mkdir helloworld
+micro run --prompt "task management system"
+```
+
+You'll see the design, confirm, and services + agent start:
+
+```text
+Services:
+  ● task — Core task management
+  ● project — Project organization
+
+Generate? [Y/n]
+
+Micro
+  Services:
+    ● task
+    ● project
+  Agents:
+    ◆ agent
+```
+
+The interactive console lets you talk to your services immediately:
+
+```text
+> Create a project called Launch, then add a task called 'Write docs'
+
+→ project_Project_Create({"name":"Launch"})
+← {"record":{"id":"p1..."},"success":true}
+→ task_Task_Create({"title":"Write docs","project_id":"p1..."})
+
+Created project Launch and added task 'Write docs' to it.
+```
+
+The console discovers services from the registry and orchestrates across them via the agent. Use `micro run -d` for detached mode without the console, or `micro chat` as a standalone command.
+
+## Quick Start: Write a Service
+
+Create and run a service manually:
+
+```bash
+micro new helloworld
 cd helloworld
-go mod init
-go get go-micro.dev/v5@latest
+micro run
 ```
 
-Write the following into `main.go`
+Open http://localhost:8080 to see the dashboard, call endpoints, and chat with your service.
+
+A service is a Go struct with methods. Doc comments and `@example` tags become tool descriptions for AI agents:
 
 ```go
 package main
 
 import (
-        "go-micro.dev/v5"
+    "context"
+
+    "go-micro.dev/v6"
 )
 
 type Request struct {
-        Name string `json:"name"`
+    Name string `json:"name"`
 }
 
 type Response struct {
-        Message string `json:"message"`
+    Message string `json:"message"`
 }
 
 type Say struct{}
 
+// Hello greets a person by name.
+// @example {"name": "Alice"}
 func (h *Say) Hello(ctx context.Context, req *Request, rsp *Response) error {
-        rsp.Message = "Hello " + req.Name
-        return nil
+    rsp.Message = "Hello " + req.Name
+    return nil
 }
 
 func main() {
-        // create the service
-        service := micro.New("helloworld")
-
-        // initialise service
-        service.Init()
-
-        // register handler
-        service.Handle(new(Say))
-
-        // run the service
-        service.Run()
+    service := micro.NewService("greeter")
+    service.Handle(new(Say))
+    service.Run()
 }
 ```
 
-Now run the service
+`micro run` gives you:
+- **Dashboard** at `http://localhost:8080`
+- **API Gateway** at `http://localhost:8080/api/{service}/{method}`
+- **Agent Playground** at `http://localhost:8080/agent`
+- **MCP Tools** at `http://localhost:8080/mcp/tools`
+- **Hot Reload** — auto-rebuild on file changes
+
+`micro new` scaffolds a reflection-based service by default — plain Go types, no code generation, so `go run .` works with nothing else installed. If you prefer Protocol Buffers, add `--proto` (this requires the `protoc` toolchain; the command tells you what to install).
+
+Templates are available for common patterns. These use Protocol Buffers, so they need the `protoc` toolchain (`protoc`, `protoc-gen-go`, `protoc-gen-micro` — `micro new` prints the install commands if they're missing):
 
 ```bash
-go run main.go
+micro new contacts --template crud
+micro new events --template pubsub
+micro new gateway --template api
 ```
 
-Take a note of the address with the log line
+## Building Agents
 
-```text
-Transport [http] Listening on [::]:35823
-```
-
-Now you can call the service
-
-```bash
-curl -XPOST \
-     -H 'Content-Type: application/json' \
-     -H 'Micro-Endpoint: Say.Hello' \
-     -d '{"name": "alice"}' \
-      http://localhost:35823
-```
-
-## Set a fixed address
-
-To set a fixed address by specifying it as an option to service, note the change from `New` to `NewService`
-
-```go
-service := micro.NewService(
-    micro.Name("helloworld"),
-    micro.Address(":8080"),
-)
-```
-
-Alternatively use `MICRO_SERVER_ADDRESS=:8080` as an env var
-
-```bash
-curl -XPOST \
-     -H 'Content-Type: application/json' \
-     -H 'Micro-Endpoint: Say.Hello' \
-     -d '{"name": "alice"}' \
-      http://localhost:8080
-```
-
-## Protobuf
-
-If you want to define services with protobuf you can use protoc-gen-micro (go-micro.dev/v5/cmd/protoc-gen-micro).
-
-Install the generator:
-
-```bash
-go install go-micro.dev/v5/cmd/protoc-gen-micro@latest
-```
-
-```bash
-cd helloworld
-mkdir proto
-```
-
-Edit a file `proto/helloworld.proto`
-
-```proto
-syntax = "proto3";
-
-package greeter;
-option go_package = "/proto;helloworld";
-
-service Say {
-        rpc Hello(Request) returns (Response) {}
-}
-
-message Request {
-        string name = 1;
-}
-
-message Response {
-        string message = 1;
-}
-```
-
-You can now generate a client/server like so (ensure `$GOBIN` is on your `$PATH` so `protoc` can find `protoc-gen-micro`):
-
-```bash
-protoc --proto_path=. --micro_out=. --go_out=. helloworld.proto
-```
-
-In your `main.go` update the code to reference the generated code
+An Agent is an intelligent layer that manages one or more services:
 
 ```go
 package main
 
-import (
-        "go-micro.dev/v5"
-
-        pb "github.com/micro/helloworld/proto"
-)
-
-type Say struct{}
-
-func (h *Say) Hello(ctx context.Context, req *pb.Request, rsp *pb.Response) error {
-        rsp.Message = "Hello " + req.Name
-        return nil
-}
+import "go-micro.dev/v6"
 
 func main() {
-        // create the service
-        service := micro.New("helloworld")
-
-        // initialise service
-        service.Init()
-
-        // register handler
-        pb.RegisterSayHandler(service.Server(), &Say{})
-
-        // run the service
-        service.Run()
+    agent := micro.NewAgent("task-mgr",
+        micro.AgentServices("task", "project"),
+        micro.AgentPrompt("You manage tasks and projects. You understand deadlines, priorities, and assignments."),
+        micro.AgentProvider("anthropic"),
+        micro.AgentAPIKey("sk-ant-..."),
+    )
+    agent.Run()
 }
 ```
 
-Now I can run this again
+An agent is a service — it has a proto-defined `Agent.Chat` RPC endpoint and registers in the registry like everything else. It:
+- Discovers its services from the registry
+- Only sees endpoints from its assigned services (scoped tools)
+- Maintains conversation memory in the store (persists across restarts)
+- Is callable via `micro call`, the interactive console, or any go-micro client
 
-```bash
-go run main.go
-```
-
-## Call via a client
-
-The generated code provides us a client
+Use it programmatically:
 
 ```go
-package main
+resp, _ := agent.Ask(ctx, "What tasks are overdue for Alice?")
+fmt.Println(resp.Reply)
+```
 
-import (
-        "context"
-        "fmt"
+Or via the CLI:
 
-        "go-micro.dev/v5"
-        pb "github.com/micro/helloworld/proto"
+```bash
+micro agent list                    # list registered agents
+micro call task-mgr Agent.Chat '{"message": "What tasks are overdue?"}'
+```
+
+When multiple agents are registered, the console routes to the right agent automatically.
+
+## Event-Driven Flows
+
+A Flow subscribes to a broker topic and triggers an LLM when events arrive. You can define flows in code or run them from the CLI.
+
+**In code:**
+
+```go
+f := micro.NewFlow("onboard-user",
+    micro.FlowTrigger("events.user.created"),
+    micro.FlowPrompt("New user created: {{.Data}}. Send welcome email and create workspace."),
+    micro.FlowProvider("anthropic"),
+    micro.FlowAPIKey(os.Getenv("MICRO_AI_API_KEY")),
 )
-
-func main() {
-        service := micro.New("helloworld")
-        service.Init()
-
-        say := pb.NewSayService("helloworld", service.Client())
-
-        rsp, err := say.Hello(context.TODO(), &pb.Request{
-            Name: "John",
-        })
-        if err != nil {
-                fmt.Println(err)
-                return
-        }
-
-        fmt.Println(rsp.Message)
-}
+f.Register(service.Options().Registry, service.Options().Broker, service.Client())
 ```
 
-## Command line
+**From the CLI:**
 
-Install the Micro CLI:
-
-```
-go install go-micro.dev/v5/cmd/micro@latest
-```
-
-Call a running service via RPC:
-
-```
-micro call helloworld Say.Hello '{"name": "John"}'
+```bash
+micro flow run --trigger events.user.created --prompt "New user: {{.Data}}. Send welcome email."
+micro flow exec --prompt "Summarize all open tickets and email the report."
 ```
 
-Alternative using the dynamic CLI commands:
+The flow discovers all services as tools and lets the LLM decide which RPCs to call in response to the event.
 
-```
-micro helloworld say hello --name="John"
-```
+## CLI Workflow
+
+| Command | Purpose |
+|---------|---------|
+| `micro run --prompt "..."` | Generate services + agent, start with interactive console |
+| `micro run` | Dev mode: hot reload, gateway, interactive console |
+| `micro run -d` | Detached mode (no console) |
+| `micro chat` | Standalone chat (when not using micro run) |
+| `micro agent list` | List registered agents |
+| `micro flow run --trigger <topic>` | Run an event-driven flow |
+| `micro flow exec --prompt "..."` | Execute a one-shot flow |
+| `micro new myservice` | Scaffold a service |
+| `micro call service endpoint '{}'` | Call a service or agent |
+| `micro build` | Compile production binaries |
+| `micro deploy user@server` | Deploy via SSH + systemd |
+
+## Next Steps
+
+- [AI Integration](ai-integration.html) — how services, agents, MCP, and LLMs fit together
+- [Agent Design](https://github.com/micro/go-micro/blob/master/internal/docs/AGENT_DESIGN.md) — the full agent interface specification
+- [MCP & AI Agents](mcp.html) — MCP gateway, tool discovery, and auth
+- [Data Model](model.html) — typed persistence with CRUD and queries
+- [Deployment](deployment.html) — deploy via SSH + systemd

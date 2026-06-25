@@ -3,43 +3,39 @@ package cmd
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/urfave/cli/v2"
-	"go-micro.dev/v5/auth"
-	"go-micro.dev/v5/broker"
-	nbroker "go-micro.dev/v5/broker/nats"
-	rabbit "go-micro.dev/v5/broker/rabbitmq"
-	"go-micro.dev/v5/cache"
-	"go-micro.dev/v5/cache/redis"
-	"go-micro.dev/v5/client"
-	"go-micro.dev/v5/config"
-	"go-micro.dev/v5/debug/profile"
-	"go-micro.dev/v5/debug/profile/http"
-	"go-micro.dev/v5/debug/profile/pprof"
-	"go-micro.dev/v5/debug/trace"
-	"go-micro.dev/v5/events"
-	"go-micro.dev/v5/genai"
-	"go-micro.dev/v5/genai/gemini"
-	"go-micro.dev/v5/genai/openai"
-	"go-micro.dev/v5/logger"
-	mprofile "go-micro.dev/v5/profile"
-	"go-micro.dev/v5/registry"
-	"go-micro.dev/v5/registry/consul"
-	"go-micro.dev/v5/registry/etcd"
-	"go-micro.dev/v5/registry/nats"
-	"go-micro.dev/v5/selector"
-	"go-micro.dev/v5/server"
-	"go-micro.dev/v5/store"
-	"go-micro.dev/v5/store/mysql"
-	natsjskv "go-micro.dev/v5/store/nats-js-kv"
-	postgres "go-micro.dev/v5/store/postgres"
-	"go-micro.dev/v5/transport"
-	ntransport "go-micro.dev/v5/transport/nats"
+	"go-micro.dev/v6/auth"
+	"go-micro.dev/v6/broker"
+	nbroker "go-micro.dev/v6/broker/nats"
+	rabbit "go-micro.dev/v6/broker/rabbitmq"
+	"go-micro.dev/v6/cache"
+	"go-micro.dev/v6/cache/redis"
+	"go-micro.dev/v6/client"
+	"go-micro.dev/v6/config"
+	"go-micro.dev/v6/debug/profile"
+	"go-micro.dev/v6/debug/profile/http"
+	"go-micro.dev/v6/debug/profile/pprof"
+	"go-micro.dev/v6/debug/trace"
+	"go-micro.dev/v6/events"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/registry"
+	"go-micro.dev/v6/registry/consul"
+	"go-micro.dev/v6/registry/etcd"
+	"go-micro.dev/v6/registry/nats"
+	"go-micro.dev/v6/selector"
+	"go-micro.dev/v6/server"
+	mprofile "go-micro.dev/v6/service/profile"
+	"go-micro.dev/v6/store"
+	"go-micro.dev/v6/store/mysql"
+	natsjskv "go-micro.dev/v6/store/nats-js-kv"
+	postgres "go-micro.dev/v6/store/postgres"
+	"go-micro.dev/v6/transport"
+	ntransport "go-micro.dev/v6/transport/nats"
 )
 
 type Cmd interface {
@@ -248,21 +244,6 @@ var (
 			EnvVars: []string{"MICRO_CONFIG"},
 			Usage:   "The source of the config to be used to get configuration",
 		},
-		&cli.StringFlag{
-			Name:    "genai",
-			EnvVars: []string{"MICRO_GENAI"},
-			Usage:   "GenAI provider to use (e.g. openai, gemini, noop)",
-		},
-		&cli.StringFlag{
-			Name:    "genai_key",
-			EnvVars: []string{"MICRO_GENAI_KEY"},
-			Usage:   "GenAI API key",
-		},
-		&cli.StringFlag{
-			Name:    "genai_model",
-			EnvVars: []string{"MICRO_GENAI_MODEL"},
-			Usage:   "GenAI model to use (optional)",
-		},
 	}
 
 	DefaultBrokers = map[string]func(...broker.Option) broker.Broker{
@@ -312,32 +293,43 @@ var (
 		"redis": redis.NewRedisCache,
 	}
 	DefaultStreams = map[string]func(...events.Option) (events.Stream, error){}
-
-	DefaultGenAI = map[string]func(...genai.Option) genai.GenAI{
-		"openai": openai.New,
-		"gemini": gemini.New,
-	}
 )
 
 func init() {
-	rand.Seed(time.Now().Unix())
 }
 
 func newCmd(opts ...Option) Cmd {
+	// Create local copies so each cmd instance is isolated.
+	// This allows multiple services in a single binary without
+	// conflicting through shared global pointers.
+	localAuth := auth.DefaultAuth
+	localBroker := broker.DefaultBroker
+	localClient := client.DefaultClient
+	localRegistry := registry.DefaultRegistry
+	localServer := server.DefaultServer
+	localSelector := selector.DefaultSelector
+	localTransport := transport.DefaultTransport
+	localStore := store.DefaultStore
+	localTracer := trace.DefaultTracer
+	localProfile := profile.DefaultProfile
+	localConfig := config.DefaultConfig
+	localCache := cache.DefaultCache
+	localStream := events.DefaultStream
+
 	options := Options{
-		Auth:         &auth.DefaultAuth,
-		Broker:       &broker.DefaultBroker,
-		Client:       &client.DefaultClient,
-		Registry:     &registry.DefaultRegistry,
-		Server:       &server.DefaultServer,
-		Selector:     &selector.DefaultSelector,
-		Transport:    &transport.DefaultTransport,
-		Store:        &store.DefaultStore,
-		Tracer:       &trace.DefaultTracer,
-		DebugProfile: &profile.DefaultProfile,
-		Config:       &config.DefaultConfig,
-		Cache:        &cache.DefaultCache,
-		Stream:       &events.DefaultStream,
+		Auth:         &localAuth,
+		Broker:       &localBroker,
+		Client:       &localClient,
+		Registry:     &localRegistry,
+		Server:       &localServer,
+		Selector:     &localSelector,
+		Transport:    &localTransport,
+		Store:        &localStore,
+		Tracer:       &localTracer,
+		DebugProfile: &localProfile,
+		Config:       &localConfig,
+		Cache:        &localCache,
+		Stream:       &localStream,
 
 		Brokers:       DefaultBrokers,
 		Clients:       DefaultClients,
@@ -389,8 +381,6 @@ func (c *cmd) Options() Options {
 }
 
 func (c *cmd) Before(ctx *cli.Context) error {
-	// Set GenAI provider from flags/env
-	setGenAIFromFlags(ctx)
 	// If flags are set then use them otherwise do nothing
 	var serverOpts []server.Option
 	var clientOpts []client.Option
@@ -408,13 +398,9 @@ func (c *cmd) Before(ctx *cli.Context) error {
 				return fmt.Errorf("failed to load local profile: %v", ierr)
 			}
 			*c.opts.Registry = imported.Registry
-			registry.DefaultRegistry = imported.Registry
 			*c.opts.Broker = imported.Broker
-			broker.DefaultBroker = imported.Broker
 			*c.opts.Store = imported.Store
-			store.DefaultStore = imported.Store
 			*c.opts.Transport = imported.Transport
-			transport.DefaultTransport = imported.Transport
 		case "nats":
 			imported, ierr := mprofile.NatsProfile()
 			if ierr != nil {
@@ -455,7 +441,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 		// only change if we have the client and type differs
 		if cl, ok := c.opts.Clients[name]; ok && (*c.opts.Client).String() != name {
 			*c.opts.Client = cl()
-			client.DefaultClient = *c.opts.Client
 		}
 	}
 
@@ -464,7 +449,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 		// only change if we have the server and type differs
 		if s, ok := c.opts.Servers[name]; ok && (*c.opts.Server).String() != name {
 			*c.opts.Server = s()
-			server.DefaultServer = *c.opts.Server
 		}
 	}
 
@@ -476,7 +460,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 		}
 
 		*c.opts.Store = s(store.WithClient(*c.opts.Client))
-		store.DefaultStore = *c.opts.Store
 	}
 
 	// Set the tracer
@@ -487,7 +470,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 		}
 
 		*c.opts.Tracer = r()
-		trace.DefaultTracer = *c.opts.Tracer
 	}
 
 	// Setup auth
@@ -514,7 +496,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 		}
 
 		*c.opts.Auth = r(authOpts...)
-		auth.DefaultAuth = *c.opts.Auth
 	}
 
 	// Set the registry
@@ -536,7 +517,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 			return fmt.Errorf("unsupported profile: %s", name)
 		}
 		*c.opts.DebugProfile = p()
-		profile.DefaultProfile = *c.opts.DebugProfile
 	}
 
 	// Set the broker
@@ -561,7 +541,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 
 		// No server option here. Should there be?
 		clientOpts = append(clientOpts, client.Selector(*c.opts.Selector))
-		selector.DefaultSelector = *c.opts.Selector
 	}
 
 	// Set the transport
@@ -714,7 +693,6 @@ func (c *cmd) Before(ctx *cli.Context) error {
 				logger.Fatalf("Error configuring config: %v", err)
 			}
 			*c.opts.Config = rc
-			config.DefaultConfig = *c.opts.Config
 		}
 	}
 	return nil
@@ -736,7 +714,6 @@ func (c *cmd) setRegistry(r registry.Registry) ([]server.Option, []client.Option
 	if err := (*c.opts.Broker).Init(broker.Registry(*c.opts.Registry)); err != nil {
 		logger.Fatalf("Error configuring broker: %v", err)
 	}
-	registry.DefaultRegistry = *c.opts.Registry
 	return serverOpts, clientOpts
 }
 func (c *cmd) setStream(s events.Stream) ([]server.Option, []client.Option) {
@@ -747,7 +724,6 @@ func (c *cmd) setStream(s events.Stream) ([]server.Option, []client.Option) {
 	// serverOpts = append(serverOpts, server.Registry(*c.opts.Registry))
 	// clientOpts = append(clientOpts, client.Registry(*c.opts.Registry))
 
-	events.DefaultStream = *c.opts.Stream
 	return serverOpts, clientOpts
 }
 
@@ -757,7 +733,6 @@ func (c *cmd) setBroker(b broker.Broker) ([]server.Option, []client.Option) {
 	*c.opts.Broker = b
 	serverOpts = append(serverOpts, server.Broker(*c.opts.Broker))
 	clientOpts = append(clientOpts, client.Broker(*c.opts.Broker))
-	broker.DefaultBroker = *c.opts.Broker
 	return serverOpts, clientOpts
 }
 
@@ -765,7 +740,6 @@ func (c *cmd) setStore(s store.Store) ([]server.Option, []client.Option) {
 	var serverOpts []server.Option
 	var clientOpts []client.Option
 	*c.opts.Store = s
-	store.DefaultStore = *c.opts.Store
 	return serverOpts, clientOpts
 }
 
@@ -775,7 +749,6 @@ func (c *cmd) setTransport(t transport.Transport) ([]server.Option, []client.Opt
 	*c.opts.Transport = t
 	serverOpts = append(serverOpts, server.Transport(*c.opts.Transport))
 	clientOpts = append(clientOpts, client.Transport(*c.opts.Transport))
-	transport.DefaultTransport = *c.opts.Transport
 	return serverOpts, clientOpts
 }
 
@@ -822,25 +795,4 @@ func Register(cmds ...*cli.Command) {
 	sort.Slice(app.Commands, func(i, j int) bool {
 		return app.Commands[i].Name < app.Commands[j].Name
 	})
-}
-
-func setGenAIFromFlags(ctx *cli.Context) {
-	provider := ctx.String("genai")
-	key := ctx.String("genai_key")
-	model := ctx.String("genai_model")
-
-	switch provider {
-	case "openai":
-		if key == "" {
-			key = os.Getenv("OPENAI_API_KEY")
-		}
-		genai.DefaultGenAI = openai.New(genai.WithAPIKey(key), genai.WithModel(model))
-	case "gemini":
-		if key == "" {
-			key = os.Getenv("GEMINI_API_KEY")
-		}
-		genai.DefaultGenAI = gemini.New(genai.WithAPIKey(key), genai.WithModel(model))
-	default:
-		genai.DefaultGenAI = genai.Default
-	}
 }

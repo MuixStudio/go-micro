@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go-micro.dev/v5/config/loader"
-	"go-micro.dev/v5/config/reader"
-	"go-micro.dev/v5/config/reader/json"
-	"go-micro.dev/v5/config/source"
+	"go-micro.dev/v6/config/loader"
+	"go-micro.dev/v6/config/reader"
+	"go-micro.dev/v6/config/reader/json"
+	"go-micro.dev/v6/config/source"
 )
 
 type memory struct {
@@ -104,7 +104,7 @@ func (m *memory) watch(idx int, s source.Source) {
 			case <-done:
 			case <-m.exit:
 			}
-			w.Stop()
+			_ = w.Stop()
 		}()
 
 		// block watch

@@ -3,19 +3,19 @@ package cmd
 import (
 	"context"
 
-	"go-micro.dev/v5/auth"
-	"go-micro.dev/v5/broker"
-	"go-micro.dev/v5/cache"
-	"go-micro.dev/v5/client"
-	"go-micro.dev/v5/config"
-	"go-micro.dev/v5/debug/profile"
-	"go-micro.dev/v5/debug/trace"
-	"go-micro.dev/v5/events"
-	"go-micro.dev/v5/registry"
-	"go-micro.dev/v5/selector"
-	"go-micro.dev/v5/server"
-	"go-micro.dev/v5/store"
-	"go-micro.dev/v5/transport"
+	"go-micro.dev/v6/auth"
+	"go-micro.dev/v6/broker"
+	"go-micro.dev/v6/cache"
+	"go-micro.dev/v6/client"
+	"go-micro.dev/v6/config"
+	"go-micro.dev/v6/debug/profile"
+	"go-micro.dev/v6/debug/trace"
+	"go-micro.dev/v6/events"
+	"go-micro.dev/v6/registry"
+	"go-micro.dev/v6/selector"
+	"go-micro.dev/v6/server"
+	"go-micro.dev/v6/store"
+	"go-micro.dev/v6/transport"
 )
 
 type Options struct {
@@ -84,91 +84,78 @@ func Version(v string) Option {
 func Broker(b *broker.Broker) Option {
 	return func(o *Options) {
 		o.Broker = b
-		broker.DefaultBroker = *b
 	}
 }
 
 func Cache(c *cache.Cache) Option {
 	return func(o *Options) {
 		o.Cache = c
-		cache.DefaultCache = *c
 	}
 }
 
 func Config(c *config.Config) Option {
 	return func(o *Options) {
 		o.Config = c
-		config.DefaultConfig = *c
 	}
 }
 
 func Selector(s *selector.Selector) Option {
 	return func(o *Options) {
 		o.Selector = s
-		selector.DefaultSelector = *s
 	}
 }
 
 func Registry(r *registry.Registry) Option {
 	return func(o *Options) {
 		o.Registry = r
-		registry.DefaultRegistry = *r
 	}
 }
 
 func Transport(t *transport.Transport) Option {
 	return func(o *Options) {
 		o.Transport = t
-		transport.DefaultTransport = *t
 	}
 }
 
 func Client(c *client.Client) Option {
 	return func(o *Options) {
 		o.Client = c
-		client.DefaultClient = *c
 	}
 }
 
 func Server(s *server.Server) Option {
 	return func(o *Options) {
 		o.Server = s
-		server.DefaultServer = *s
 	}
 }
 
 func Store(s *store.Store) Option {
 	return func(o *Options) {
 		o.Store = s
-		store.DefaultStore = *s
 	}
 }
 
 func Stream(s *events.Stream) Option {
 	return func(o *Options) {
 		o.Stream = s
-		events.DefaultStream = *s
 	}
 }
 
 func Tracer(t *trace.Tracer) Option {
 	return func(o *Options) {
 		o.Tracer = t
-		trace.DefaultTracer = *t
 	}
 }
 
 func Auth(a *auth.Auth) Option {
 	return func(o *Options) {
 		o.Auth = a
-		auth.DefaultAuth = *a
 	}
 }
 
 func Profile(p *profile.Profile) Option {
 	return func(o *Options) {
 		o.DebugProfile = p
-		profile.DefaultProfile = *p
 	}
 }
 

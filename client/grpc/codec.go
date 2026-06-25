@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"go-micro.dev/v5/codec"
-	"go-micro.dev/v5/codec/bytes"
+	"go-micro.dev/v6/codec"
+	"go-micro.dev/v6/codec/bytes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -42,7 +42,7 @@ func UseNumber() {
 }
 
 func (w wrapCodec) String() string {
-	return w.Codec.Name()
+	return w.Name()
 }
 
 func (w wrapCodec) Marshal(v interface{}) ([]byte, error) {

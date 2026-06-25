@@ -90,7 +90,7 @@ Update your proto generation:
 
 ```bash
 # Install protoc-gen-micro
-go install go-micro.dev/v5/cmd/protoc-gen-micro@latest
+go install go-micro.dev/v6/cmd/protoc-gen-micro@v6
 
 # Generate both gRPC and Go Micro code
 protoc --proto_path=. \
@@ -99,6 +99,8 @@ protoc --proto_path=. \
   --micro_out=. --micro_opt=paths=source_relative \
   proto/hello.proto
 ```
+
+> **Note:** Use a specific version instead of `@latest` to avoid module path conflicts. See [releases](https://github.com/micro/go-micro/releases) for the latest version.
 
 This generates:
 - `hello.pb.go` - Protocol Buffers types
@@ -113,8 +115,8 @@ package main
 
 import (
     "context"
-    "go-micro.dev/v5"
-    "go-micro.dev/v5/server"
+    "go-micro.dev/v6"
+    "go-micro.dev/v6/server"
     pb "myapp/proto"
 )
 
@@ -176,11 +178,11 @@ Use gRPC as the underlying transport:
 
 ```go
 import (
-    "go-micro.dev/v5"
-    "go-micro.dev/v5/client"
-    "go-micro.dev/v5/server"
-    grpcclient "go-micro.dev/v5/client/grpc"
-    grpcserver "go-micro.dev/v5/server/grpc"
+    "go-micro.dev/v6"
+    "go-micro.dev/v6/client"
+    "go-micro.dev/v6/server"
+    grpcclient "go-micro.dev/v6/client/grpc"
+    grpcserver "go-micro.dev/v6/server/grpc"
 )
 
 svc := micro.NewService(
@@ -263,7 +265,7 @@ defer client.Agent().ServiceDeregister("greeter-1")
 ### After (Go Micro)
 
 ```go
-import "go-micro.dev/v5/registry/consul"
+import "go-micro.dev/v6/registry/consul"
 
 reg := consul.NewConsulRegistry()
 svc := micro.NewService(
@@ -288,7 +290,7 @@ svc.Run()
 ### After (Go Micro)
 
 ```go
-import "go-micro.dev/v5/selector"
+import "go-micro.dev/v6/selector"
 
 // Client-side load balancing built-in
 svc := micro.NewService(
@@ -386,7 +388,7 @@ gRPC uses protobuf by default. Go Micro supports multiple codecs.
 
 Ensure both use protobuf:
 ```go
-import "go-micro.dev/v5/codec/proto"
+import "go-micro.dev/v6/codec/proto"
 
 svc := micro.NewService(
     micro.Codec("application/protobuf", proto.Marshaler{}),
@@ -413,4 +415,4 @@ svc := micro.NewService(
 
 - [Examples](../examples/)
 - [GitHub Issues](https://github.com/micro/go-micro/issues)
-- [API Documentation](https://pkg.go.dev/go-micro.dev/v5)
+- [API Documentation](https://pkg.go.dev/go-micro.dev/v6)

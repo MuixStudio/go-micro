@@ -3,6 +3,12 @@ core:
     url: /docs/
   - title: Getting Started
     url: /docs/getting-started.html
+  - title: AI Integration
+    url: /docs/ai-integration.html
+  - title: MCP & AI Agents
+    url: /docs/mcp.html
+  - title: Deployment
+    url: /docs/deployment.html
   - title: Architecture
     url: /docs/architecture.html
   - title: Configuration
@@ -26,11 +32,31 @@ examples:
   - title: Real-World Examples
     url: /docs/examples/realworld/
 guides:
+  - title: The Agent Harness
+    url: /docs/guides/agent-harness.html
+  - title: Agents and Workflows
+    url: /docs/guides/agents-and-workflows.html
+  - title: Agent Loops
+    url: /docs/guides/agent-loops.html
+  - title: Plan & Delegate
+    url: /docs/guides/plan-delegate.html
+  - title: Agent Guardrails
+    url: /docs/guides/agent-guardrails.html
+  - title: Payments (x402)
+    url: /docs/guides/x402-payments.html
+  - title: Agent2Agent (A2A)
+    url: /docs/guides/a2a-protocol.html
+  - title: Atlas Cloud Integration
+    url: /docs/guides/atlascloud-integration.html
+  - title: AI Provider Guide
+    url: /docs/guides/ai-provider-guide.html
   - title: Comparison
     url: /docs/guides/comparison.html
   - title: Migration Guides
     url: /docs/guides/migration/
 project:
+  - title: Commercial Support
+    url: /docs/support.html
   - title: ADR Index
     url: /docs/architecture/
   - title: Contributing
@@ -43,6 +69,7 @@ project:
     url: /docs/server.html
 search_order:
   - /docs/getting-started.html
+  - /docs/mcp.html
   - /docs/architecture.html
   - /docs/config.html
   - /docs/observability.html
@@ -58,4 +85,5 @@ search_order:
   - /docs/architecture/
   - /docs/contributing.html
   - /docs/roadmap.html
+  - /docs/support.html
   - /docs/server.html

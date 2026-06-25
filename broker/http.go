@@ -15,14 +15,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"go-micro.dev/v5/codec/json"
-	merr "go-micro.dev/v5/errors"
-	"go-micro.dev/v5/registry"
-	"go-micro.dev/v5/registry/cache"
-	"go-micro.dev/v5/transport/headers"
-	maddr "go-micro.dev/v5/util/addr"
-	mnet "go-micro.dev/v5/util/net"
-	mls "go-micro.dev/v5/util/tls"
+	"go-micro.dev/v6/codec/json"
+	merr "go-micro.dev/v6/errors"
+	maddr "go-micro.dev/v6/internal/util/addr"
+	mnet "go-micro.dev/v6/internal/util/net"
+	mls "go-micro.dev/v6/internal/util/tls"
+	"go-micro.dev/v6/registry"
+	"go-micro.dev/v6/registry/cache"
+	"go-micro.dev/v6/transport/headers"
 	"golang.org/x/net/http2"
 )
 
@@ -74,14 +74,12 @@ var (
 )
 
 func init() {
-	rand.Seed(time.Now().Unix())
 }
 
 func newTransport(config *tls.Config) *http.Transport {
 	if config == nil {
-		config = &tls.Config{
-			InsecureSkipVerify: true,
-		}
+		// Use environment-based config - secure by default
+		config = mls.Config()
 	}
 
 	dialTLS := func(network string, addr string) (net.Conn, error) {
@@ -102,7 +100,7 @@ func newTransport(config *tls.Config) *http.Transport {
 	})
 
 	// setup http2
-	http2.ConfigureTransport(t)
+	_ = http2.ConfigureTransport(t)
 
 	return t
 }
@@ -290,19 +288,19 @@ func (h *httpBroker) run(l net.Listener) {
 }
 
 func (h *httpBroker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.Method != "POST" {
+	if req.Method != http.MethodPost {
 		err := merr.BadRequest("go.micro.broker", "Method not allowed")
 		http.Error(w, err.Error(), http.StatusMethodNotAllowed)
 		return
 	}
 	defer req.Body.Close()
 
-	req.ParseForm()
+	_ = req.ParseForm()
 
 	b, err := io.ReadAll(req.Body)
 	if err != nil {
 		errr := merr.InternalServerError("go.micro.broker", "Error reading request body: %v", err)
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(errr.Error()))
 		return
 	}
@@ -310,7 +308,7 @@ func (h *httpBroker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var m *Message
 	if err = h.opts.Codec.Unmarshal(b, &m); err != nil {
 		errr := merr.InternalServerError("go.micro.broker", "Error parsing request body: %v", err)
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(errr.Error()))
 		return
 	}
@@ -320,7 +318,7 @@ func (h *httpBroker) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if len(topic) == 0 {
 		errr := merr.InternalServerError("go.micro.broker", "Topic not found")
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(errr.Error()))
 		return
 	}
@@ -408,7 +406,7 @@ func (h *httpBroker) Connect() error {
 	addr := h.address
 	h.address = l.Addr().String()
 
-	go http.Serve(l, h.mux)
+	go func() { _ = http.Serve(l, h.mux) }()
 	go func() {
 		h.run(l)
 		h.Lock()
@@ -557,7 +555,7 @@ func (h *httpBroker) Publish(topic string, msg *Message, opts ...PublishOption) 
 		}
 
 		// discard response body
-		io.Copy(io.Discard, r.Body)
+		_, _ = io.Copy(io.Discard, r.Body)
 		r.Body.Close()
 		return nil
 	}

@@ -5,20 +5,22 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v2"
-	"go-micro.dev/v5/auth"
-	"go-micro.dev/v5/broker"
-	"go-micro.dev/v5/cache"
-	"go-micro.dev/v5/client"
-	"go-micro.dev/v5/cmd"
-	"go-micro.dev/v5/config"
-	"go-micro.dev/v5/debug/profile"
-	"go-micro.dev/v5/debug/trace"
-	"go-micro.dev/v5/logger"
-	"go-micro.dev/v5/registry"
-	"go-micro.dev/v5/selector"
-	"go-micro.dev/v5/server"
-	"go-micro.dev/v5/store"
-	"go-micro.dev/v5/transport"
+	"go-micro.dev/v6/auth"
+	"go-micro.dev/v6/broker"
+	"go-micro.dev/v6/cache"
+	"go-micro.dev/v6/client"
+	"go-micro.dev/v6/cmd"
+	"go-micro.dev/v6/config"
+	"go-micro.dev/v6/debug/profile"
+	"go-micro.dev/v6/debug/trace"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/model"
+	"go-micro.dev/v6/model/memory"
+	"go-micro.dev/v6/registry"
+	"go-micro.dev/v6/selector"
+	"go-micro.dev/v6/server"
+	"go-micro.dev/v6/store"
+	"go-micro.dev/v6/transport"
 )
 
 // Options for micro service.
@@ -30,6 +32,7 @@ type Options struct {
 	Config   config.Config
 	Client   client.Client
 	Server   server.Server
+	Model    model.Model
 
 	// Other options for implementations of the interface
 	// can be stored in a context
@@ -54,14 +57,17 @@ type Option func(*Options)
 
 func newOptions(opts ...Option) Options {
 	opt := Options{
-		Auth:      auth.DefaultAuth,
-		Broker:    broker.DefaultBroker,
-		Cache:     cache.DefaultCache,
-		Cmd:       cmd.DefaultCmd,
-		Config:    config.DefaultConfig,
-		Client:    client.DefaultClient,
-		Server:    server.DefaultServer,
-		Store:     store.DefaultStore,
+		Auth:   auth.DefaultAuth,
+		Broker: broker.DefaultBroker,
+		Cmd:    cmd.NewCmd(),
+		Config: config.DefaultConfig,
+		// Per-service instances: each service gets its own server, client,
+		// store, and cache to allow multiple services in a single binary.
+		Client:    client.NewClient(),
+		Server:    server.NewRPCServer(),
+		Store:     store.NewStore(),
+		Model:     memory.New(),
+		Cache:     cache.NewCache(),
 		Registry:  registry.DefaultRegistry,
 		Transport: transport.DefaultTransport,
 		Context:   context.Background(),
@@ -81,16 +87,14 @@ func Broker(b broker.Broker) Option {
 	return func(o *Options) {
 		o.Broker = b
 		// Update Client and Server
-		o.Client.Init(client.Broker(b))
-		o.Server.Init(server.Broker(b))
-		broker.DefaultBroker = b
+		_ = o.Client.Init(client.Broker(b))
+		_ = o.Server.Init(server.Broker(b))
 	}
 }
 
 func Cache(c cache.Cache) Option {
 	return func(o *Options) {
 		o.Cache = c
-		cache.DefaultCache = c
 	}
 }
 
@@ -104,7 +108,6 @@ func Cmd(c cmd.Cmd) Option {
 func Client(c client.Client) Option {
 	return func(o *Options) {
 		o.Client = c
-		client.DefaultClient = c
 	}
 }
 
@@ -119,7 +122,7 @@ func Context(ctx context.Context) Option {
 // Handle will register a handler without any fuss
 func Handle(v interface{}) Option {
 	return func(o *Options) {
-		o.Server.Handle(
+		_ = o.Server.Handle(
 			o.Server.NewHandler(v),
 		)
 	}
@@ -138,7 +141,6 @@ func HandleSignal(b bool) Option {
 func Profile(p profile.Profile) Option {
 	return func(o *Options) {
 		o.Profile = p
-		profile.DefaultProfile = p
 	}
 }
 
@@ -146,7 +148,6 @@ func Profile(p profile.Profile) Option {
 func Server(s server.Server) Option {
 	return func(o *Options) {
 		o.Server = s
-		server.DefaultServer = s
 	}
 }
 
@@ -154,7 +155,13 @@ func Server(s server.Server) Option {
 func Store(s store.Store) Option {
 	return func(o *Options) {
 		o.Store = s
-		store.DefaultStore = s
+	}
+}
+
+// Model sets the model backend to use.
+func Model(m model.Model) Option {
+	return func(o *Options) {
+		o.Model = m
 	}
 }
 
@@ -164,18 +171,17 @@ func Registry(r registry.Registry) Option {
 	return func(o *Options) {
 		o.Registry = r
 		// Update Client and Server
-		o.Client.Init(client.Registry(r))
-		o.Server.Init(server.Registry(r))
+		_ = o.Client.Init(client.Registry(r))
+		_ = o.Server.Init(server.Registry(r))
 		// Update Broker
-		o.Broker.Init(broker.Registry(r))
-		broker.DefaultBroker = o.Broker
+		_ = o.Broker.Init(broker.Registry(r))
 	}
 }
 
 // Tracer sets the tracer for the service.
 func Tracer(t trace.Tracer) Option {
 	return func(o *Options) {
-		o.Server.Init(server.Tracer(t))
+		_ = o.Server.Init(server.Tracer(t))
 	}
 
 }
@@ -184,8 +190,6 @@ func Tracer(t trace.Tracer) Option {
 func Auth(a auth.Auth) Option {
 	return func(o *Options) {
 		o.Auth = a
-		auth.DefaultAuth = a
-
 	}
 }
 
@@ -193,15 +197,13 @@ func Auth(a auth.Auth) Option {
 func Config(c config.Config) Option {
 	return func(o *Options) {
 		o.Config = c
-		config.DefaultConfig = c
 	}
 }
 
 // Selector sets the selector for the service client.
 func Selector(s selector.Selector) Option {
 	return func(o *Options) {
-		o.Client.Init(client.Selector(s))
-		selector.DefaultSelector = s
+		_ = o.Client.Init(client.Selector(s))
 	}
 }
 
@@ -211,9 +213,8 @@ func Transport(t transport.Transport) Option {
 	return func(o *Options) {
 		o.Transport = t
 		// Update Client and Server
-		o.Client.Init(client.Transport(t))
-		o.Server.Init(server.Transport(t))
-		transport.DefaultTransport = t
+		_ = o.Client.Init(client.Transport(t))
+		_ = o.Server.Init(server.Transport(t))
 	}
 }
 
@@ -222,28 +223,28 @@ func Transport(t transport.Transport) Option {
 // Address sets the address of the server.
 func Address(addr string) Option {
 	return func(o *Options) {
-		o.Server.Init(server.Address(addr))
+		_ = o.Server.Init(server.Address(addr))
 	}
 }
 
 // Name of the service.
 func Name(n string) Option {
 	return func(o *Options) {
-		o.Server.Init(server.Name(n))
+		_ = o.Server.Init(server.Name(n))
 	}
 }
 
 // Version of the service.
 func Version(v string) Option {
 	return func(o *Options) {
-		o.Server.Init(server.Version(v))
+		_ = o.Server.Init(server.Version(v))
 	}
 }
 
 // Metadata associated with the service.
 func Metadata(md map[string]string) Option {
 	return func(o *Options) {
-		o.Server.Init(server.Metadata(md))
+		_ = o.Server.Init(server.Metadata(md))
 	}
 }
 
@@ -264,14 +265,14 @@ func Action(a func(*cli.Context) error) Option {
 // RegisterTTL specifies the TTL to use when registering the service.
 func RegisterTTL(t time.Duration) Option {
 	return func(o *Options) {
-		o.Server.Init(server.RegisterTTL(t))
+		_ = o.Server.Init(server.RegisterTTL(t))
 	}
 }
 
 // RegisterInterval specifies the interval on which to re-register.
 func RegisterInterval(t time.Duration) Option {
 	return func(o *Options) {
-		o.Server.Init(server.RegisterInterval(t))
+		_ = o.Server.Init(server.RegisterInterval(t))
 	}
 }
 
@@ -290,7 +291,7 @@ func WrapClient(w ...client.Wrapper) Option {
 // WrapCall is a convenience method for wrapping a Client CallFunc.
 func WrapCall(w ...client.CallWrapper) Option {
 	return func(o *Options) {
-		o.Client.Init(client.WrapCall(w...))
+		_ = o.Client.Init(client.WrapCall(w...))
 	}
 }
 
@@ -304,7 +305,7 @@ func WrapHandler(w ...server.HandlerWrapper) Option {
 		}
 
 		// Init once
-		o.Server.Init(wrappers...)
+		_ = o.Server.Init(wrappers...)
 	}
 }
 
@@ -318,14 +319,14 @@ func WrapSubscriber(w ...server.SubscriberWrapper) Option {
 		}
 
 		// Init once
-		o.Server.Init(wrappers...)
+		_ = o.Server.Init(wrappers...)
 	}
 }
 
 // Add opt to server option.
 func AddListenOption(option server.Option) Option {
 	return func(o *Options) {
-		o.Server.Init(option)
+		_ = o.Server.Init(option)
 	}
 }
 

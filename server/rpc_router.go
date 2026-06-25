@@ -12,9 +12,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"go-micro.dev/v5/codec"
-	merrors "go-micro.dev/v5/errors"
-	log "go-micro.dev/v5/logger"
+	"go-micro.dev/v6/codec"
+	merrors "go-micro.dev/v6/errors"
+	log "go-micro.dev/v6/logger"
 )
 
 var (
@@ -62,7 +62,6 @@ type router struct {
 	freeResp *response
 
 	subscribers map[string][]*subscriber
-	name        string
 
 	// handler wrappers
 	hdlrWrappers []HandlerWrapper
@@ -362,7 +361,7 @@ func (router *router) readRequest(r Request) (service *service, mtype *methodTyp
 			return
 		}
 		// discard body
-		cc.ReadBody(nil)
+		_ = cc.ReadBody(nil)
 
 		return
 	}
@@ -370,7 +369,7 @@ func (router *router) readRequest(r Request) (service *service, mtype *methodTyp
 	// is it a streaming request? then we don't read the body
 	if mtype.stream {
 		if cc.(codec.Codec).String() != "grpc" {
-			cc.ReadBody(nil)
+			_ = cc.ReadBody(nil)
 		}
 		return
 	}

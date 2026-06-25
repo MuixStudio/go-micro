@@ -6,15 +6,15 @@ import (
 	"crypto/tls"
 	"net"
 
-	"go-micro.dev/v5/cmd"
-	"go-micro.dev/v5/transport"
-	maddr "go-micro.dev/v5/util/addr"
-	mnet "go-micro.dev/v5/util/net"
-	mls "go-micro.dev/v5/util/tls"
+	"go-micro.dev/v6/cmd"
+	maddr "go-micro.dev/v6/internal/util/addr"
+	mnet "go-micro.dev/v6/internal/util/net"
+	mtls "go-micro.dev/v6/internal/util/tls"
+	"go-micro.dev/v6/transport"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	pb "go-micro.dev/v5/transport/grpc/proto"
+	pb "go-micro.dev/v6/transport/grpc/proto"
 )
 
 type grpcTransport struct {
@@ -44,7 +44,7 @@ func getTLSConfig(addr string) (*tls.Config, error) {
 	}
 
 	// generate a certificate
-	cert, err := mls.Certificate(hosts...)
+	cert, err := mtls.Certificate(hosts...)
 	if err != nil {
 		return nil, err
 	}
@@ -105,9 +105,8 @@ func (t *grpcTransport) Dial(addr string, opts ...transport.DialOption) (transpo
 	if t.opts.Secure || t.opts.TLSConfig != nil {
 		config := t.opts.TLSConfig
 		if config == nil {
-			config = &tls.Config{
-				InsecureSkipVerify: true,
-			}
+			// Use environment-based config - secure by default
+			config = mtls.Config()
 		}
 		creds := credentials.NewTLS(config)
 		options = append(options, grpc.WithTransportCredentials(creds))

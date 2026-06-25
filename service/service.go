@@ -6,34 +6,62 @@ import (
 	rtime "runtime"
 	"sync"
 
-	"go-micro.dev/v5/client"
-	"go-micro.dev/v5/cmd"
-	log "go-micro.dev/v5/logger"
-	"go-micro.dev/v5/server"
-	"go-micro.dev/v5/store"
-	signalutil "go-micro.dev/v5/util/signal"
+	"go-micro.dev/v6/client"
+	"go-micro.dev/v6/cmd"
+	signalutil "go-micro.dev/v6/internal/util/signal"
+	log "go-micro.dev/v6/logger"
+	"go-micro.dev/v6/model"
+	"go-micro.dev/v6/server"
+	"go-micro.dev/v6/store"
 )
 
-type service struct {
+// Service is the interface for a go-micro service.
+type Service interface {
+	// Name returns the service name.
+	Name() string
+	// Init initializes options. Parses command line flags on first call.
+	Init(...Option)
+	// Options returns the current options.
+	Options() Options
+	// Handle registers a handler with optional server.HandlerOption args.
+	Handle(v interface{}, opts ...server.HandlerOption) error
+	// Client returns the RPC client.
+	Client() client.Client
+	// Server returns the RPC server.
+	Server() server.Server
+	// Model returns the data model backend.
+	Model() model.Model
+	// Start the service (non-blocking).
+	Start() error
+	// Stop the service.
+	Stop() error
+	// Run starts the service, blocks on signal/context, then stops.
+	Run() error
+	// String returns the implementation name.
+	String() string
+}
+
+type serviceImpl struct {
 	opts Options
 
 	once sync.Once
 }
 
-func New(opts ...Option) *service {
-	return &service{
+// New creates a new service with the given options.
+func New(opts ...Option) Service {
+	return &serviceImpl{
 		opts: newOptions(opts...),
 	}
 }
 
-func (s *service) Name() string {
+func (s *serviceImpl) Name() string {
 	return s.opts.Server.Options().Name
 }
 
 // Init initializes options. Additionally it calls cmd.Init
 // which parses command line flags. cmd.Init is only called
 // on first Init.
-func (s *service) Init(opts ...Option) {
+func (s *serviceImpl) Init(opts ...Option) {
 	// process options
 	for _, o := range opts {
 		o(&s.opts)
@@ -60,32 +88,44 @@ func (s *service) Init(opts ...Option) {
 			s.opts.Logger.Log(log.FatalLevel, err)
 		}
 
-		// we might not want to do this
+		// Scope the service's store to its own table (database "service",
+		// table = service name), consistent with how agents ("agent/{name}")
+		// and flows ("flow/{name}") scope their state. This replaces the
+		// older Init(store.Table(name)) global mutation with a composable
+		// scoped handle: each service gets an isolated handle that works
+		// even when several run in one process. When the service uses the
+		// package default store, bridge it to the same scope so handlers
+		// that reach for store.DefaultStore stay isolated too.
 		name := s.opts.Cmd.App().Name
-		err := s.opts.Store.Init(store.Table(name))
-		if err != nil {
-			s.opts.Logger.Log(log.FatalLevel, err)
+		wasDefault := s.opts.Store == store.DefaultStore
+		s.opts.Store = store.Scope(s.opts.Store, "service", name)
+		if wasDefault {
+			store.DefaultStore = s.opts.Store
 		}
 	})
 }
 
-func (s *service) Options() Options {
+func (s *serviceImpl) Options() Options {
 	return s.opts
 }
 
-func (s *service) Client() client.Client {
+func (s *serviceImpl) Client() client.Client {
 	return s.opts.Client
 }
 
-func (s *service) Server() server.Server {
+func (s *serviceImpl) Server() server.Server {
 	return s.opts.Server
 }
 
-func (s *service) String() string {
+func (s *serviceImpl) Model() model.Model {
+	return s.opts.Model
+}
+
+func (s *serviceImpl) String() string {
 	return "micro"
 }
 
-func (s *service) Start() error {
+func (s *serviceImpl) Start() error {
 	for _, fn := range s.opts.BeforeStart {
 		if err := fn(); err != nil {
 			return err
@@ -105,11 +145,13 @@ func (s *service) Start() error {
 	return nil
 }
 
-func (s *service) Stop() error {
-	var err error
+func (s *serviceImpl) Stop() error {
+	var gerr error
 
 	for _, fn := range s.opts.BeforeStop {
-		err = fn()
+		if err := fn(); err != nil {
+			gerr = err
+		}
 	}
 
 	if err := s.opts.Server.Stop(); err != nil {
@@ -117,19 +159,21 @@ func (s *service) Stop() error {
 	}
 
 	for _, fn := range s.opts.AfterStop {
-		err = fn()
+		if err := fn(); err != nil {
+			gerr = err
+		}
 	}
 
-	return err
+	return gerr
 }
 
-func (s *service) Handle(v interface{}) error {
+func (s *serviceImpl) Handle(v interface{}, opts ...server.HandlerOption) error {
 	return s.opts.Server.Handle(
-		s.opts.Server.NewHandler(v),
+		s.opts.Server.NewHandler(v, opts...),
 	)
 }
 
-func (s *service) Run() (err error) {
+func (s *serviceImpl) Run() (err error) {
 	logger := s.opts.Logger
 
 	// exit when help flag is provided

@@ -6,12 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"go-micro.dev/v5/broker"
-	"go-micro.dev/v5/codec"
-	"go-micro.dev/v5/debug/trace"
-	"go-micro.dev/v5/logger"
-	"go-micro.dev/v5/registry"
-	"go-micro.dev/v5/transport"
+	"go-micro.dev/v6/broker"
+	"go-micro.dev/v6/codec"
+	"go-micro.dev/v6/debug/trace"
+	"go-micro.dev/v6/logger"
+	"go-micro.dev/v6/registry"
+	"go-micro.dev/v6/transport"
 )
 
 type RouterOptions struct {
@@ -246,7 +246,7 @@ func TLSConfig(t *tls.Config) Option {
 		}
 
 		// set the transport tls
-		o.Transport.Init(
+		_ = o.Transport.Init(
 			transport.Secure(true),
 			transport.TLSConfig(t),
 		)

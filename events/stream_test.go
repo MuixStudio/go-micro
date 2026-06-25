@@ -59,7 +59,7 @@ func runTestStream(t *testing.T, stream Stream) {
 			timeout := time.NewTimer(time.Millisecond * 250)
 
 			select {
-			case event, _ := <-evChan:
+			case event := <-evChan:
 				assert.NotNilf(t, event, "The message was nil")
 				assert.Equal(t, event.Metadata, metadata, "Metadata didn't match")
 
@@ -70,14 +70,15 @@ func runTestStream(t *testing.T, stream Stream) {
 
 				wg.Done()
 			case <-timeout.C:
-				t.Fatalf("Event was not recieved")
+				t.Errorf("Event was not received")
+				wg.Done()
 			}
 		}()
 
 		err = stream.Publish("test", payload, WithMetadata(metadata))
 		assert.Nil(t, err, "Publishing a valid message should not return an error")
 
-		// wait for the subscriber to recieve the message or timeout
+		// wait for the subscriber to receive the message or timeout
 		wg.Wait()
 	})
 
@@ -101,7 +102,7 @@ func runTestStream(t *testing.T, stream Stream) {
 			timeout := time.NewTimer(time.Millisecond * 250)
 
 			select {
-			case event, _ := <-evChan1:
+			case event := <-evChan1:
 				assert.NotNilf(t, event, "The message was nil")
 				assert.Equal(t, event.Metadata, metadata, "Metadata didn't match")
 
@@ -112,7 +113,8 @@ func runTestStream(t *testing.T, stream Stream) {
 
 				wg.Done()
 			case <-timeout.C:
-				t.Fatalf("Event was not recieved")
+				t.Errorf("Event was not received")
+				wg.Done()
 			}
 		}()
 
@@ -130,7 +132,7 @@ func runTestStream(t *testing.T, stream Stream) {
 			timeout := time.NewTimer(time.Second * 1)
 
 			select {
-			case event, _ := <-evChan2:
+			case event := <-evChan2:
 				assert.NotNilf(t, event, "The message was nil")
 				assert.Equal(t, event.Metadata, metadata, "Metadata didn't match")
 
@@ -141,11 +143,12 @@ func runTestStream(t *testing.T, stream Stream) {
 
 				wg.Done()
 			case <-timeout.C:
-				t.Fatalf("Event was not recieved")
+				t.Errorf("Event was not received")
+				wg.Done()
 			}
 		}()
 
-		// wait for the subscriber to recieve the message or timeout
+		// wait for the subscriber to receive the message or timeout
 		wg.Wait()
 	})
 
